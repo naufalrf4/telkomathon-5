@@ -1,10 +1,19 @@
 import { View, Text, Pressable } from 'react-native';
-import { Link, usePathname } from 'expo-router';
+import { Link, usePathname, type Href } from 'expo-router';
 import clsx from 'clsx';
 import { Ionicons } from '@expo/vector-icons';
+import type { ComponentProps } from 'react';
 import { colors } from '../../theme/colors';
 
-const MENU_ITEMS = [
+type IoniconsName = ComponentProps<typeof Ionicons>['name'];
+
+interface MenuItem {
+  href: Href;
+  label: string;
+  icon: IoniconsName;
+}
+
+const MENU_ITEMS: MenuItem[] = [
   { href: '/documents', label: 'Documents', icon: 'document-text-outline' },
   { href: '/syllabus', label: 'Syllabi', icon: 'school-outline' },
 ];
@@ -29,13 +38,13 @@ export function Sidebar() {
           {MENU_ITEMS.map((item) => {
             const isActive = pathname.startsWith(item.href);
             return (
-              <Link key={item.href} href={item.href as any} asChild>
+              <Link key={String(item.href)} href={item.href} asChild>
                 <Pressable className={clsx(
                   "flex-row items-center px-4 py-3 rounded-lg mb-1 transition-colors",
                   isActive ? "bg-primary/5 border-r-2 border-primary" : "hover:bg-gray-50"
                 )}>
                   <Ionicons 
-                    name={item.icon as any} 
+                    name={item.icon} 
                     size={20} 
                     color={isActive ? colors.primary : '#6B7280'} 
                     style={{ marginRight: 12 }}

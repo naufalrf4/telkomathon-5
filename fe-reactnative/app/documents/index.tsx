@@ -18,11 +18,8 @@ export default function DocumentsScreen() {
       if (Platform.OS === 'web' && file.file) {
         formData.append('file', file.file);
       } else {
-        formData.append('file', {
-          uri: file.uri,
-          name: file.name,
-          type: file.mimeType || 'application/octet-stream',
-        } as any);
+        const blob = { uri: file.uri, name: file.name, type: file.mimeType ?? 'application/octet-stream' };
+        formData.append('file', blob as unknown as Blob);
       }
 
       uploadDocument(formData, {
