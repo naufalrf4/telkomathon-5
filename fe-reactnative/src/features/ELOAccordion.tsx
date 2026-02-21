@@ -1,8 +1,8 @@
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, Pressable } from 'react-native';
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { ELO } from '../../types/api';
-import { colors } from '../../theme/colors';
+import { ELO } from '../types/api';
+import { colors } from '../theme/colors';
 import clsx from 'clsx';
 
 interface ELOAccordionProps {
@@ -20,7 +20,7 @@ export function ELOAccordion({ elos }: ELOAccordionProps) {
     <View className="space-y-2">
       {elos.map((item, index) => (
         <View key={index} className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-          <TouchableOpacity 
+          <Pressable 
             onPress={() => toggle(index)}
             className="flex-row justify-between items-center p-4 bg-gray-50 active:bg-gray-100"
           >
@@ -35,7 +35,7 @@ export function ELOAccordion({ elos }: ELOAccordionProps) {
               size={20} 
               color={colors.textSecondary} 
             />
-          </TouchableOpacity>
+          </Pressable>
           
           {expandedIndex === index && (
             <View className="p-4 border-t border-gray-100 bg-white">

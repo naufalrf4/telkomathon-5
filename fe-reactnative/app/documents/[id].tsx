@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, Alert } from 'react-native';
+import { View, Text, ScrollView, Alert, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiDelete } from '../../src/services/api';
@@ -27,66 +27,102 @@ export default function DocumentDetailScreen() {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
       router.back();
     },
+    onError: (error: any) => {
+        Alert.alert('Kesalahan', error.message || 'Gagal menghapus dokumen');
+    }
   });
 
-  if (isLoading || !document) return <LoadingSpinner fullScreen />;
+  const confirmDelete = () => {
+    Alert.alert('Hapus Dokumen', 'Yakin ingin menghapus file ini? Tindakan ini tidak dapat dibatalkan.', [
+      { text: 'Batal', style: 'cancel' },
+      { text: 'Hapus', style: 'destructive', onPress: () => deleteMutation.mutate() }
+    ]);
+  };
+
+  if (isLoading || !document) return <LoadingSpinner fullScreen message="Memuat detail..." />;
+
+  const getFileIcon = (type: string) => {
+    if (type.includes('pdf')) return 'document-text';
+    if (type.includes('word') || type.includes('docx')) return 'document';
+    if (type.includes('presentation') || type.includes('pptx')) return 'easel';
+    return 'document-outline';
+  };
 
   return (
-    <ScrollView className="flex-1">
-      <View className="mb-6 flex-row items-center">
-        <Button 
-          title="Back" 
-          variant="outline" 
-          size="sm" 
-          onPress={() => router.back()} 
-          icon={<Ionicons name="arrow-back" size={16} color="black" />}
-          className="mr-4"
-        />
-        <Text className="text-2xl font-bold text-gray-900 flex-1">{document.filename}</Text>
-      </View>
-
-      <Card className="mb-6">
-        <View className="flex-row justify-between items-start mb-4">
-          <View>
-            <Text className="text-sm text-gray-500 uppercase tracking-wide mb-1">Status</Text>
-            <Badge 
-              label={document.status} 
-              variant={document.status === 'processed' ? 'success' : 'warning'} 
-            />
-          </View>
-          <View>
-            <Text className="text-sm text-gray-500 uppercase tracking-wide mb-1">Type</Text>
-            <Text className="font-medium text-gray-900">{document.file_type}</Text>
-          </View>
-          <View>
-            <Text className="text-sm text-gray-500 uppercase tracking-wide mb-1">Uploaded</Text>
-            <Text className="font-medium text-gray-900">{new Date(document.created_at).toLocaleDateString()}</Text>
-          </View>
+    <ScrollView className="flex-1 bg-gray-50">
+      <View className="px-6 py-6 max-w-5xl mx-auto w-full">
+        {/* Breadcrumb */}
+        <View className="flex-row items-center mb-6">
+          <Pressable 
+            onPress={() => router.back()}
+            className="flex-row items-center text-gray-500 hover:text-gray-900 transition-colors"
+          >
+            <Ionicons name="arrow-back" size={16} color={colors.textSecondary} />
+            <Text className="ml-1 text-gray-500 font-medium">Dokumen</Text>
+          </Pressable>
+          <Text className="mx-2 text-gray-400">/</Text>
+          <Text className="text-gray-900 font-medium" numberOfLines={1}>Detail</Text>
         </View>
 
-        <View className="border-t border-gray-100 pt-4 mt-2">
+        {/* Main Info Card */}
+        <Card className="mb-6 p-6">
+          <View className="flex-row items-start">
+            <View className="w-20 h-20 bg-red-50 rounded-2xl items-center justify-center mr-6">
+              <Ionicons name={getFileIcon(document.file_type)} size={40} color={colors.primary} />
+            </View>
+            <View className="flex-1">
+              <Text className="text-2xl font-bold text-gray-900 mb-2">{document.filename}</Text>
+              <View className="flex-row items-center flex-wrap gap-2 mb-4">
+                <Badge 
+                  label={document.status.toUpperCase()} 
+                  variant={document.status === 'processed' ? 'success' : 'warning'} 
+                />
+                <Text className="text-sm text-gray-500">•</Text>
+                <Text className="text-sm text-gray-500">{new Date(document.created_at).toLocaleDateString()}</Text>
+                <Text className="text-sm text-gray-500">•</Text>
+                <Text className="text-sm text-gray-500">{document.file_type}</Text>
+              </View>
+            </View>
+          </View>
+        </Card>
+
+        {/* Status / Info */}
+        <View className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <Text className="text-lg font-bold text-gray-900 mb-4">Status Pemrosesan</Text>
+          
+          {document.status === 'processed' ? (
+            <View className="bg-green-50 border border-green-100 rounded-lg p-4 flex-row items-start">
+              <Ionicons name="checkmark-circle" size={24} color={colors.success} />
+              <View className="ml-3 flex-1">
+                <Text className="font-bold text-green-800 mb-1">Siap untuk Pembuatan Silabus</Text>
+                <Text className="text-green-700 text-sm">
+                  Dokumen ini telah berhasil diproses. Konten sudah terindeks dan siap digunakan untuk pembuatan silabus.
+                </Text>
+              </View>
+            </View>
+          ) : (
+             <View className="bg-blue-50 border border-blue-100 rounded-lg p-4 flex-row items-start">
+              <LoadingSpinner />
+              <View className="ml-3 flex-1">
+                <Text className="font-bold text-blue-800 mb-1">Sedang Memproses...</Text>
+                <Text className="text-blue-700 text-sm">
+                  Kami sedang menganalisis konten dokumen. Ini mungkin memakan waktu beberapa saat tergantung pada ukuran file.
+                </Text>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* Actions */}
+        <View className="flex-row justify-end space-x-4">
           <Button 
-            title="Delete Document" 
+            title="Hapus Dokumen" 
             variant="danger" 
-            onPress={() => Alert.alert('Delete', 'Are you sure?', [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Delete', style: 'destructive', onPress: () => deleteMutation.mutate() }
-            ])}
+            onPress={confirmDelete}
             isLoading={deleteMutation.isPending}
             icon={<Ionicons name="trash-outline" size={18} color="white" />}
           />
         </View>
-      </Card>
-
-      <View className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-        <View className="flex-row items-center mb-2">
-          <Ionicons name="information-circle-outline" size={20} color={colors.info} />
-          <Text className="font-bold text-blue-800 ml-2">Processing Info</Text>
-        </View>
-        <Text className="text-blue-700 text-sm">
-          This document has been processed and is ready to be used for syllabus generation.
-          The content has been chunked and embedded for AI retrieval.
-        </Text>
       </View>
     </ScrollView>
   );

@@ -12,4 +12,6 @@ export const colors = {
   warning: '#F59E0B',
   error: '#EF4444',
   info: '#3B82F6',
+  aiAccent: '#7C3AED',
+  aiBackground: '#F3F0FF',
 } as const;

@@ -5,9 +5,12 @@ import { Document } from '../types/api';
 export function useDocuments() {
   const queryClient = useQueryClient();
 
-  const { data: documents, isLoading, error } = useQuery({
+  const { data: documents, isLoading, error, refetch } = useQuery({
     queryKey: ['documents'],
-    queryFn: () => apiGet<Document[]>('/documents'),
+    queryFn: async () => {
+      const res = await apiGet<{ documents: Document[]; total: number }>('/documents');
+      return res.documents;
+    },
   });
 
   const uploadMutation = useMutation({
@@ -24,6 +27,7 @@ export function useDocuments() {
     documents,
     isLoading,
     error,
+    refetch,
     uploadDocument: uploadMutation.mutate,
     isUploading: uploadMutation.isPending,
     deleteDocument: deleteMutation.mutate,

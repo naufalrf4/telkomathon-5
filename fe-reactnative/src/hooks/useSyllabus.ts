@@ -5,10 +5,12 @@ import { Syllabus, PersonalizationResult, CompetencyGap } from '../types/api';
 export function useSyllabus(id?: string) {
   const queryClient = useQueryClient();
 
-  // List all syllabi
-  const { data: syllabi, isLoading: isLoadingList } = useQuery({
+  const { data: syllabi, isLoading: isLoadingList, refetch: refetchSyllabi } = useQuery({
     queryKey: ['syllabi'],
-    queryFn: () => apiGet<Syllabus[]>('/syllabi'),
+    queryFn: async () => {
+      const res = await apiGet<{ syllabi: Syllabus[]; total: number }>('/syllabi');
+      return res.syllabi;
+    },
     enabled: !id,
   });
 
@@ -38,6 +40,7 @@ export function useSyllabus(id?: string) {
     syllabi,
     syllabus,
     isLoading: isLoadingList || isLoadingDetails,
+    refetch: refetchSyllabi,
     personalize: personalizeMutation.mutate,
     isPersonalizing: personalizeMutation.isPending,
     personalization,

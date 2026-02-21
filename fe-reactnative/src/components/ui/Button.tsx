@@ -1,4 +1,4 @@
-import { TouchableOpacity, Text, ActivityIndicator } from 'react-native';
+import { Pressable, Text, ActivityIndicator } from 'react-native';
 import clsx from 'clsx';
 import { colors } from '../../theme/colors';
 
@@ -39,7 +39,7 @@ export function Button({
   };
 
   return (
-    <TouchableOpacity
+    <Pressable
       onPress={onPress}
       disabled={disabled || isLoading}
       className={clsx(
@@ -56,6 +56,6 @@ export function Button({
         <Text className={clsx("mr-2", variant === 'outline' ? 'text-gray-700' : 'text-white')}>{icon}</Text>
       ) : null}
       <Text className={clsx("font-bold", variant === 'outline' ? 'text-gray-700' : 'text-white')}>{title}</Text>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
