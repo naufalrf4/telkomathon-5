@@ -1,59 +1,45 @@
-SYLLABUS_SYSTEM_PROMPT = (
-    "You are an expert curriculum designer at Telkom Corporate University (SoDSNP). "
-    "Your task is to design structured training syllabi following the TLO → ELO → PCE framework. "
-    "Always respond with valid JSON only. No prose outside JSON."
-)
-
-SYLLABUS_OUTPUT_SCHEMA = {
-    "tlo": "Terminal Learning Objective string",
-    "elos": [
-        {
-            "id": "ELO-01",
-            "description": "ELO description",
-            "pce": "Performance | Condition | Evaluation criteria",
-            "sub_elos": [],
-        }
-    ],
-    "journey": {
-        "pre_learning": {
-            "duration": "1 week",
-            "method": "Self-paced online",
-            "activities": [],
-        },
-        "classroom": {
-            "duration": "1.5 days",
-            "method": "Virtual/In-person",
-            "sessions": [],
-        },
-        "after_learning": {
-            "duration": "2 months",
-            "method": "On-the-job + coaching",
-            "activities": [],
-        },
-    },
-}
+from openai.types.chat import ChatCompletionMessageParam
 
 
-def build_syllabus_prompt(topic: str, level: int, context: str) -> list[dict]:
-    import json
-
-    user_content = (
-        f"Design a complete training syllabus for the topic: '{topic}'\n"
-        f"Target competency level: {level} (1=Beginner, 5=Expert)\n\n"
-        f"Reference materials from organizational knowledge base:\n{context}\n\n"
-        f"Generate a JSON object with this exact structure:\n{json.dumps(SYLLABUS_OUTPUT_SCHEMA, indent=2)}\n\n"
-        f"Requirements:\n"
-        f"- TLO must be measurable and behavioral\n"
-        f"- Generate 3-5 ELOs, each with PCE criteria\n"
-        f"- Learning Journey follows 70-20-10 model\n"
-        f"- Pre-learning: 1 week self-paced\n"
-        f"- Classroom: 1.5-2 days structured sessions\n"
-        f"- After-learning: 2 months on-the-job\n"
-        f"- Use Indonesian language for content\n"
-        f"- Return ONLY valid JSON, no markdown fences"
+def build_syllabus_prompt(
+    topic: str,
+    level: int,
+    context: str,
+    additional_context: str = "",
+) -> list[ChatCompletionMessageParam]:
+    system = (
+        "You are an expert curriculum designer for Telkom Corporate University. "
+        "You design structured learning syllabi following the TLO → ELO → PCE framework. "
+        "Always respond with valid JSON only, no markdown, no explanation."
     )
+    user = f"""Design a complete syllabus for the following training topic.
 
-    return [
-        {"role": "system", "content": SYLLABUS_SYSTEM_PROMPT},
-        {"role": "user", "content": user_content},
-    ]
+Topic: {topic}
+Target Level: {level} (1=Basic, 2=Elementary, 3=Intermediate, 4=Advanced, 5=Expert)
+Additional Context: {additional_context}
+
+Reference Materials:
+{context}
+
+Respond with this exact JSON structure:
+{{
+  "tlo": "Terminal Learning Objective — one sentence describing overall competency",
+  "elos": [
+    {{
+      "elo": "Enabling Learning Objective description",
+      "pce": ["Performance Criterion 1", "Performance Criterion 2", "Performance Criterion 3"]
+    }}
+  ],
+  "journey": {{
+    "pre_learning": ["Pre-learning activity 1", "Pre-learning activity 2"],
+    "classroom": ["Classroom session 1", "Classroom session 2", "Classroom session 3"],
+    "after_learning": ["Post-learning activity 1", "Post-learning activity 2"]
+  }}
+}}
+
+Requirements:
+- 3-5 ELOs, each with 2-4 PCEs
+- Journey sections: 2-3 pre-learning, 3-5 classroom, 2-3 after-learning
+- All in Bahasa Indonesia
+- Level-appropriate complexity"""
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
