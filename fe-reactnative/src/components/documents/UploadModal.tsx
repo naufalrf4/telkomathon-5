@@ -46,19 +46,24 @@ export function UploadModal({
       if (result.canceled) return;
 
       const file = result.assets[0];
+      const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+      const docTypeMap: Record<string, string> = { pdf: 'pdf', docx: 'docx', pptx: 'pptx' };
+      const docType = docTypeMap[ext] ?? 'pdf';
+
       const formData = new FormData();
 
       if (Platform.OS === 'web') {
-        // @ts-expect-error - React Native Web specific handling
-        formData.append('file', file.file);
+        const webFile = (file as typeof file & { file?: File }).file;
+        if (webFile) formData.append('file', webFile);
       } else {
         formData.append('file', {
           uri: file.uri,
           name: file.name,
-          type: file.mimeType || 'application/octet-stream',
-        } as any);
+          type: file.mimeType ?? 'application/octet-stream',
+        } as unknown as Blob);
       }
 
+      formData.append('doc_type', docType);
       onUpload(formData);
     } catch (err) {
       console.error('Error picking document:', err);
