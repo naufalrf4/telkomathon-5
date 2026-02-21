@@ -1,3 +1,5 @@
+from openai.types.chat import ChatCompletionMessageParam
+
 PERSONALIZE_SYSTEM_PROMPT = (
     "You are a personalized learning specialist at Telkom Corporate University. "
     "Your task is to analyze competency gaps and recommend targeted micro-learning modules. "
@@ -6,10 +8,10 @@ PERSONALIZE_SYSTEM_PROMPT = (
 
 
 def build_personalize_prompt(
-    syllabus_context: dict,
-    competency_gaps: list[dict],
+    syllabus_context: dict[str, object],
+    competency_gaps: list[dict[str, object]],
     available_content: str,
-) -> list[dict]:
+) -> list[ChatCompletionMessageParam]:
     import json
 
     user_content = (

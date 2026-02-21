@@ -1,3 +1,5 @@
+from openai.types.chat import ChatCompletionMessageParam
+
 CHAT_SYSTEM_PROMPT = (
     "You are a curriculum revision assistant at Telkom Corporate University. "
     "You help refine and improve training syllabi based on user feedback. "
@@ -7,10 +9,10 @@ CHAT_SYSTEM_PROMPT = (
 
 
 def build_revision_prompt(
-    syllabus: dict,
+    syllabus: dict[str, object],
     user_message: str,
-    conversation_history: list[dict],
-) -> list[dict]:
+    conversation_history: list[ChatCompletionMessageParam],
+) -> list[ChatCompletionMessageParam]:
     import json
 
     system_with_context = (
@@ -20,7 +22,9 @@ def build_revision_prompt(
         f'{{"revised_syllabus": {{...updated fields only...}}, "changes_summary": "brief description"}}'
     )
 
-    messages: list[dict] = [{"role": "system", "content": system_with_context}]
+    messages: list[ChatCompletionMessageParam] = [
+        {"role": "system", "content": system_with_context}
+    ]
     messages.extend(conversation_history)
     messages.append({"role": "user", "content": user_message})
     return messages
