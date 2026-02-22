@@ -28,7 +28,25 @@ export default function DocumentsScreen() {
     ]);
   };
 
-  const getFileIcon = (type: string) => {
+  const getStatusLabel = (status: string) => {
+    const map: Record<string, string> = {
+      uploaded: 'Diunggah',
+      processing: 'Diproses',
+      processed: 'Selesai',
+      ready: 'Siap',
+      failed: 'Gagal',
+    };
+    return map[status] ?? status;
+  };
+
+  const formatDate = (dateStr: string | undefined | null) => {
+    if (!dateStr) return '-';
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('id-ID');
+  };
+
+  const getFileIcon = (type: string | undefined | null) => {
+    if (!type) return 'document-outline';
     if (type.includes('pdf')) return 'document-text';
     if (type.includes('word') || type.includes('docx')) return 'document';
     if (type.includes('presentation') || type.includes('pptx')) return 'easel';
@@ -49,12 +67,12 @@ export default function DocumentsScreen() {
             <Text className="text-base font-semibold text-gray-900 mb-1" numberOfLines={1}>{item.filename}</Text>
             <View className="flex-row items-center space-x-2">
               <Badge 
-                label={item.status.toUpperCase()} 
-                variant={item.status === 'processed' ? 'success' : 'warning'} 
+                label={getStatusLabel(item.status)} 
+                variant={item.status === 'processed' || item.status === 'ready' ? 'success' : item.status === 'failed' ? 'error' : 'warning'} 
                 size="sm"
               />
               <Text className="text-xs text-gray-500">
-                {new Date(item.created_at).toLocaleDateString()}
+                {formatDate(item.created_at)}
               </Text>
             </View>
           </View>

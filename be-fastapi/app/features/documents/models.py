@@ -37,7 +37,7 @@ class DocumentChunk(Base):
     )
     chunk_index: Mapped[int] = mapped_column(Integer)
     chunk_text: Mapped[str] = mapped_column(Text)
-    embedding: Mapped[list] = mapped_column(Vector(1536))
+    embedding: Mapped[list] = mapped_column(Vector(3072))
     chunk_metadata: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 

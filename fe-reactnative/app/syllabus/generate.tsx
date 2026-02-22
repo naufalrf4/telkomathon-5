@@ -24,13 +24,12 @@ export default function GenerateSyllabusScreen() {
   const { startSSE } = useSSE(
     '/syllabi/generate',
     (chunk) => {
-      if (chunk.startsWith('ID:')) {
-        setGeneratedSyllabusId(chunk.substring(3).trim());
-      } else {
-        setStreamOutput((prev) => prev + chunk);
-      }
+      setStreamOutput((prev) => prev + chunk);
     },
-    () => setIsGenerating(false)
+    (syllabusId?: string) => {
+      if (syllabusId) setGeneratedSyllabusId(syllabusId);
+      setIsGenerating(false);
+    }
   );
 
   const handleGenerate = async () => {

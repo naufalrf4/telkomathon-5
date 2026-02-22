@@ -41,7 +41,18 @@ export default function DocumentDetailScreen() {
 
   if (isLoading || !document) return <LoadingSpinner fullScreen message="Memuat detail..." />;
 
-  const getFileIcon = (type: string) => {
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      uploaded: 'Diunggah',
+      processing: 'Diproses',
+      ready: 'Siap',
+      failed: 'Gagal',
+    };
+    return labels[status] ?? status;
+  };
+
+  const getFileIcon = (type: string | undefined | null) => {
+    if (!type) return 'document-outline';
     if (type.includes('pdf')) return 'document-text';
     if (type.includes('word') || type.includes('docx')) return 'document';
     if (type.includes('presentation') || type.includes('pptx')) return 'easel';
@@ -74,13 +85,13 @@ export default function DocumentDetailScreen() {
               <Text className="text-2xl font-bold text-gray-900 mb-2">{document.filename}</Text>
               <View className="flex-row items-center flex-wrap gap-2 mb-4">
                 <Badge 
-                  label={document.status.toUpperCase()} 
-                  variant={document.status === 'processed' ? 'success' : 'warning'} 
+                  label={getStatusLabel(document.status)} 
+                  variant={document.status === 'ready' ? 'success' : document.status === 'failed' ? 'error' : 'warning'} 
                 />
                 <Text className="text-sm text-gray-500">•</Text>
-                <Text className="text-sm text-gray-500">{new Date(document.created_at).toLocaleDateString()}</Text>
+                <Text className="text-sm text-gray-500">{document.created_at ? new Date(document.created_at).toLocaleDateString('id-ID') : '-'}</Text>
                 <Text className="text-sm text-gray-500">•</Text>
-                <Text className="text-sm text-gray-500">{document.file_type}</Text>
+                <Text className="text-sm text-gray-500">{document.file_type ?? '-'}</Text>
               </View>
             </View>
           </View>
@@ -90,7 +101,7 @@ export default function DocumentDetailScreen() {
         <View className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
           <Text className="text-lg font-bold text-gray-900 mb-4">Status Pemrosesan</Text>
           
-          {document.status === 'processed' ? (
+          {document.status === 'ready' ? (
             <View className="bg-green-50 border border-green-100 rounded-lg p-4 flex-row items-start">
               <Ionicons name="checkmark-circle" size={24} color={colors.success} />
               <View className="ml-3 flex-1">

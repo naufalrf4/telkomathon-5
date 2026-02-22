@@ -31,7 +31,7 @@ export default function SyllabusDetailScreen() {
               <Pressable onPress={() => router.back()} className="p-1 -ml-1">
                 <Ionicons name="arrow-back" size={24} color={colors.secondary} />
               </Pressable>
-              <Badge label={LEVEL_LABELS[syllabus.targetLevel] || `Level ${syllabus.targetLevel}`} variant="info" />
+              <Badge label={LEVEL_LABELS[syllabus.target_level] || `Level ${syllabus.target_level}`} variant="info" />
               <Badge label={syllabus.status} variant={syllabus.status === 'completed' ? 'success' : 'warning'} />
             </View>
             <Text className="text-3xl font-bold text-gray-900">{syllabus.topic}</Text>

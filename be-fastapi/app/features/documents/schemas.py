@@ -1,18 +1,18 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DocumentResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: uuid.UUID
     filename: str
     doc_type: str
-    file_format: str
+    file_type: str = Field(validation_alias="file_format")
     status: str
-    upload_date: datetime
+    created_at: datetime = Field(validation_alias="upload_date")
     chunk_count: int = 0
 
 
