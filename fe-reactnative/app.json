@@ -28,6 +28,9 @@
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
+    "experiments": {
+      "asyncRoutes": true
+    },
     "plugins": [
       "expo-router",
       "expo-web-browser"
