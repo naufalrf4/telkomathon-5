@@ -1,8 +1,13 @@
 export function getBaseURL(): string {
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    return `${window.location.origin}/api/v1`;
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
   }
-  return 'http://localhost:8000/api/v1';
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    const protocol = window.location.protocol;
+    const host = window.location.host;
+    return `${protocol}//${host}/api/v1`;
+  }
+  return '/api/v1';
 }
 
 export async function apiGet<T>(path: string): Promise<T> {
