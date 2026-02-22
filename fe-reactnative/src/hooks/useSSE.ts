@@ -1,9 +1,9 @@
-import { BASE_URL } from '../services/api';
+import { getBaseURL } from '../services/api';
 
 export function useSSE(url: string, onChunk: (chunk: string) => void, onDone: (syllabusId?: string) => void) {
   const startSSE = async (body: unknown) => {
     try {
-      const res = await fetch(`${BASE_URL}${url}`, {
+      const res = await fetch(`${getBaseURL()}${url}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

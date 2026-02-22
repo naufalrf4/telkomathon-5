@@ -49,3 +49,6 @@ Thumbs.db
 
 # Docker volumes / local data
 pgdata/
+
+# Server adapter
+server.py
