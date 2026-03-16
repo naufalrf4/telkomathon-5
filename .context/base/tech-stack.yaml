@@ -1,0 +1,77 @@
+project:
+  name: MyDigiLearn
+  monorepo: true
+  version_source:
+    backend: be-fastapi/pyproject.toml
+    frontend: fe-reactnative/package.json
+
+backend:
+  language: Python
+  runtime: ">=3.11"
+  package_manager: uv
+  manifests:
+    - be-fastapi/pyproject.toml
+    - be-fastapi/uv.lock
+  framework: FastAPI 0.115.x
+  server: Uvicorn 0.34.x
+  database:
+    engine: PostgreSQL 16
+    vector_extension: pgvector 0.3.x
+    driver: asyncpg 0.30.x
+    orm: SQLAlchemy 2.0.x (async)
+    migrations: Alembic 1.14.x
+  ai:
+    provider: Azure OpenAI
+    chat_sdk: openai 1.61.x
+    tokenization: tiktoken 0.8.x
+  document_processing:
+    - pdfplumber 0.11.x
+    - python-docx 1.1.x
+    - python-pptx 1.0.x
+    - pdf2image 1.17.x
+    - pytesseract 0.3.x
+    - WeasyPrint 63.x
+  tooling:
+    lint: Ruff 0.9.x
+    typecheck: mypy 1.14.x
+    tests: pytest 8.x + pytest-asyncio 0.25.x
+
+frontend:
+  language: TypeScript
+  runtime: React 19.1.0
+  package_manager: npm
+  manifests:
+    - fe-reactnative/package.json
+    - fe-reactnative/package-lock.json
+  framework:
+    - Expo ~54.0.33
+    - Expo Router ~6.0.23
+    - React Native 0.81.5
+    - React Native Web ^0.21.0
+  styling:
+    - NativeWind ^4.2.2
+    - Tailwind CSS ^3.4.19
+  state:
+    - Zustand ^5.0.11
+    - TanStack React Query ^5.90.21
+  tooling:
+    scripts_present:
+      - start
+      - android
+      - ios
+      - web
+    scripts_missing:
+      - lint
+      - test
+      - typecheck
+      - build
+
+local_runtime:
+  docker_compose:
+    file: docker-compose.yml
+    services:
+      - db
+      - backend
+  notable_absences:
+    - No frontend container is defined in docker-compose.yml
+    - No repo CI workflow files were found

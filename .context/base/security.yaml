@@ -1,0 +1,50 @@
+auth:
+  status: no verified auth/authz implementation found in current repo scan
+  implication: treat the app as an internal or competition-stage system and do not invent auth guarantees
+
+secrets:
+  required_env:
+    - DATABASE_URL
+    - AZURE_OPENAI_API_KEY
+    - AZURE_OPENAI_ENDPOINT
+    - AZURE_OPENAI_CHAT_DEPLOYMENT
+    - AZURE_OPENAI_EMBEDDING_DEPLOYMENT
+  handling_rules:
+    - Keep secrets in `.env` files only.
+    - Never hardcode secrets into committed application code.
+    - Treat `server.py` as a sensitive local helper because it contains deployment credentials.
+
+data_sensitivity:
+  categories:
+    - uploaded reference documents
+    - generated syllabus content
+    - AI-generated summaries and learning outcomes
+  storage_clues:
+    - backend uploads directory defaults to `uploads`
+    - database connection uses PostgreSQL with pgvector
+
+api_surface:
+  namespace: /api/v1
+  backend_error_shape: structured detail/status/code responses are expected by project docs and feature code
+  frontend_runtime_override:
+    allowed_sources:
+      - window.__MYDIGILEARN_API_URL__
+      - apiBaseUrl query parameter
+      - localStorage['mydigilearn.apiBaseUrl']
+      - EXPO_PUBLIC_API_URL
+  cors:
+    source: be-fastapi/app/config.py
+    default_origins:
+      - http://localhost:3000
+      - http://127.0.0.1:3000
+      - http://localhost:8081
+      - http://127.0.0.1:8081
+      - http://localhost:19006
+      - http://127.0.0.1:19006
+    note: Additional origins such as custom manual-test ports must be supplied via `CORS_ALLOWED_ORIGINS`.
+
+security_requirements:
+  - Preserve backend-owned validation for wizard step transitions.
+  - Keep runtime API base overrides limited to trusted local or deployment-controlled configuration.
+  - Keep sensitive helper files out of normal implementation scope.
+  - Document any future auth, RBAC, or deployment changes here as soon as they become durable project truth.

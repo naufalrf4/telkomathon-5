@@ -1,0 +1,37 @@
+backend:
+  frameworks:
+    - pytest
+    - pytest-asyncio
+  required_commands:
+    - uv run ruff check .
+    - uv run mypy .
+    - uv run pytest
+  critical_coverage:
+    - design session state transitions and downstream resets
+    - document parsing and upload flows
+    - syllabus finalization and export routes
+  notes:
+    - 'be-fastapi/tests/features/test_design_sessions_service.py exists and should remain a key regression target.'
+
+frontend:
+  repo_evidence:
+    - Expo route screens and service layers are present
+    - 'No canonical `test`, `lint`, `typecheck`, or `build` script is defined in `fe-reactnative/package.json`.'
+  ad_hoc_verification_commands:
+    - npx tsc --noEmit
+    - npx expo export --platform web
+  minimum_verification_until_scripts_exist:
+    - Validate changed routes against the running app when possible
+    - Prefer editor/LSP diagnostics for changed TypeScript files
+    - Keep API contract changes aligned with backend route/state truth
+  verified_manual_e2e:
+    - document list and ready-document session creation
+    - design-session wizard progression through assist, course context, TLO, performance, ELO, and finalize
+    - finalized syllabus detail rendering and DOCX download
+    - runtime API override on exported web builds via query/localStorage
+
+quality_gates:
+  - Do not claim a frontend test command exists unless it is added to the manifest.
+  - Prefer backend contract tests for wizard behavior because backend owns session state.
+  - On the syllabus detail happy path, no eager `GET /personalize/{id}` request should fire unless the personalize route explicitly opts in.
+  - Update this file when canonical frontend verification commands are added.

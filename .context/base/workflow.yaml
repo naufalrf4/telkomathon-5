@@ -1,0 +1,84 @@
+install:
+  backend:
+    working_directory: be-fastapi
+    command: uv sync
+    source: inferred from uv-managed backend (`pyproject.toml` + `uv.lock`)
+  frontend:
+    working_directory: fe-reactnative
+    command: npm install
+    source: package-lock.json present
+
+dev:
+  backend:
+    working_directory: be-fastapi
+    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    source: docker-compose.yml
+  frontend:
+    working_directory: fe-reactnative
+    command: npm run web
+    equivalent:
+      - npx expo start --web
+    source: package.json
+  full_stack:
+    working_directory: .
+    command: docker compose up --build
+    source: docker-compose.yml
+
+verification:
+  backend:
+    lint:
+      command: uv run ruff check .
+      source: pyproject.toml
+    typecheck:
+      command: uv run mypy .
+      source: pyproject.toml
+    test:
+      command: uv run pytest
+      source: pyproject.toml
+  frontend:
+    available_scripts:
+      - npm run web
+      - npm run start
+      - npm run android
+      - npm run ios
+    ad_hoc_commands:
+      - npx tsc --noEmit
+      - npx expo export --platform web
+    runtime_notes:
+      - Static web builds can override the API base at runtime via `window.__MYDIGILEARN_API_URL__`, the `apiBaseUrl` query parameter, or `localStorage['mydigilearn.apiBaseUrl']`.
+      - When frontend and backend run on different local origins, set backend `CORS_ALLOWED_ORIGINS` to include the active frontend origin.
+    note: No canonical frontend lint, test, typecheck, or build script is defined in package.json.
+
+git_process:
+  branch_naming:
+    preferred:
+      - feature/<feature-name>
+      - fix/<issue>
+      - docs/<topic>
+    source: root AGENTS naming conventions
+  pull_requests:
+    policy: No repo-specific PR process was found; keep changes focused and summarize verification clearly.
+  commits:
+    auto_commit: false
+    message_style: conventional commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`)
+  pushes:
+    auto_push: false
+  authorship:
+    user_identity_only: true
+    forbid_coauthor_trailers: true
+
+agent_artifacts:
+  keep_out_of_git:
+    - .plans/
+    - .sisyphus/
+    - '*.context.md'
+  committed_steering_files:
+    - AGENTS.md
+    - PROGRESS.md
+    - .context/
+
+known_repo_quirks:
+  - "Root `.gitignore` historically ignored `AGENTS.md` even though it is tracked; this should stay corrected."
+  - Root `server.py` is ignored on purpose because it contains deployment credentials and should not be treated as normal app code.
+  - Frontend API base URL can be overridden at runtime via window, query string, localStorage, or `EXPO_PUBLIC_API_URL`.
+  - "`alembic upgrade head` currently resolves through merge revision `8f1629c83c67`, which reconciles the `design_sessions` and embedding-dimension migration branches."

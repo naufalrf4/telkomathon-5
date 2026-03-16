@@ -1,0 +1,34 @@
+mode: refresh
+
+phases:
+  - name: backend-contract
+    status: completed
+    summary: Move syllabus creation from a legacy one-shot flow to stateful `design_sessions` endpoints.
+    evidence:
+      - .plans/backend.md
+      - be-fastapi/app/features/design_sessions
+  - name: frontend-wizard
+    status: completed
+    summary: Render the backend-owned wizard flow in Expo Router and reduce local-only state.
+    evidence:
+      - .plans/frontend.md
+      - fe-reactnative/app/design-session/[sessionId].tsx
+      - fe-reactnative/src/services/designSessions.ts
+  - name: integration-and-hardening
+    status: completed
+    summary: Keep legacy compatibility while validating the wizard, DOCX export, and downstream syllabus flows end to end.
+    evidence:
+      - .plans/integration.md
+      - be-fastapi/app/features/syllabus/router.py
+      - fe-reactnative/src/services/api.ts
+      - fe-reactnative/src/hooks/useSyllabus.ts
+
+major_dependencies:
+  - Azure OpenAI availability and correct deployment names
+  - PostgreSQL with pgvector for backend persistence
+  - Consistent API contract between `design_sessions` endpoints and Expo screens
+
+known_unknowns:
+  - No repo-level CI workflow is present.
+  - Auth and deployment policy are not fully documented in the repo.
+  - No canonical frontend verification scripts are present yet, even though `npx tsc --noEmit` and `npx expo export --platform web` are currently useful ad hoc checks.
