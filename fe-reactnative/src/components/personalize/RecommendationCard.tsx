@@ -9,6 +9,18 @@ interface RecommendationCardProps {
 }
 
 export function RecommendationCard({ recommendation }: RecommendationCardProps) {
+  const getPriorityLabel = (priority: number | string) => {
+    if (priority === 1 || priority === 'High') {
+      return 'High';
+    }
+
+    if (priority === 2 || priority === 'Medium') {
+      return 'Medium';
+    }
+
+    return 'Low';
+  };
+
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'High': return colors.error;
@@ -27,12 +39,14 @@ export function RecommendationCard({ recommendation }: RecommendationCardProps) 
     }
   };
 
+  const priorityLabel = getPriorityLabel(recommendation.priority);
+
   return (
     <Card className="mb-4 bg-white border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
       <View className="flex-row justify-between items-start mb-2">
         <Badge 
           label={recommendation.type} 
-          variant="outline" 
+          variant="default" 
           className="bg-gray-50 text-gray-700 border-gray-200"
         />
         <Text className="text-xs font-medium text-gray-500 bg-gray-50 px-2 py-1 rounded-md">
@@ -49,12 +63,9 @@ export function RecommendationCard({ recommendation }: RecommendationCardProps) 
       </Text>
       
       <View className="flex-row items-center mt-2 pt-3 border-t border-gray-50">
-        <View className={`w-2 h-2 rounded-full mr-2 bg-${
-          recommendation.priority === 'High' ? 'red-500' : 
-          recommendation.priority === 'Medium' ? 'yellow-500' : 'blue-500'
-        }`} />
+        <View className="w-2 h-2 rounded-full mr-2" style={{ backgroundColor: getPriorityColor(priorityLabel) }} />
         <Text className="text-xs font-medium text-gray-400 uppercase tracking-wider">
-          {getPriorityText(recommendation.priority)}
+          {getPriorityText(priorityLabel)}
         </Text>
       </View>
     </Card>

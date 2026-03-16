@@ -6,7 +6,8 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
@@ -34,9 +35,11 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@playwright/test": "^1.54.2",
     "@types/react": "~19.1.0",
     "autoprefixer": "^10.4.24",
     "postcss": "^8.5.6",
+    "serve": "^14.2.4",
     "tailwindcss": "^3.4.19",
     "typescript": "~5.9.2"
   },

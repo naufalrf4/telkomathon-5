@@ -2,16 +2,24 @@ import { View, Text } from 'react-native';
 import { usePathname } from 'expo-router';
 
 const PAGE_TITLES: Record<string, string> = {
-  '/': 'Home',
+  '/': 'Dashboard',
   '/documents': 'Documents',
   '/syllabus': 'Syllabus',
-  '/syllabus/generate': 'Buat Silabus',
+  '/syllabus/generated': 'Generated Syllabus',
+  '/syllabus/create': 'Create Syllabus',
+  '/design-session': 'Resume Create Flow',
+  '/syllabus/generate': 'Create Syllabus',
+  '/design-session/new': 'Create Syllabus',
 };
 
 function getPageTitle(pathname: string): string {
   if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
   if (pathname.startsWith('/documents/')) return 'Detail Dokumen';
-  if (pathname.startsWith('/syllabus/')) return 'Syllabus';
+  if (pathname.startsWith('/syllabus/create/')) return 'Create Syllabus';
+  if (pathname.startsWith('/design-session/')) return 'Resume Create Flow';
+  if (pathname.match(/^\/syllabus\/[^/]+\/revision$/)) return 'Revision Workspace';
+  if (pathname.match(/^\/syllabus\/[^/]+\/export$/)) return 'Export DOCX';
+  if (pathname.startsWith('/syllabus/')) return 'Silabus';
   if (pathname.startsWith('/personalize/')) return 'Personalisasi';
   if (pathname.startsWith('/chat/')) return 'Chat & Revisi';
   if (pathname.startsWith('/export/')) return 'Ekspor';

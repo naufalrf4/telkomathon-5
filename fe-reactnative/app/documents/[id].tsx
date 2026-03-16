@@ -1,7 +1,7 @@
 import { View, Text, ScrollView, Alert, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiGet, apiDelete } from '../../src/services/api';
+import { apiGet, apiDelete, getErrorMessage } from '../../src/services/api';
 import { Document } from '../../src/types/api';
 import { Card } from '../../src/components/ui/Card';
 import { Button } from '../../src/components/ui/Button';
@@ -27,9 +27,9 @@ export default function DocumentDetailScreen() {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
       router.back();
     },
-    onError: (error: any) => {
-        Alert.alert('Kesalahan', error.message || 'Gagal menghapus dokumen');
-    }
+    onError: (error: unknown) => {
+      Alert.alert('Kesalahan', getErrorMessage(error, 'Gagal menghapus dokumen'));
+    },
   });
 
   const confirmDelete = () => {
@@ -125,7 +125,15 @@ export default function DocumentDetailScreen() {
         </View>
 
         {/* Actions */}
-        <View className="flex-row justify-end space-x-4">
+        <View className="flex-row flex-wrap justify-end gap-3">
+          {document.status === 'ready' ? (
+            <Button
+              title="Buat Syllabus Baru"
+              variant="outline"
+              onPress={() => router.push('/syllabus/create')}
+              icon={<Ionicons name="sparkles-outline" size={18} color={colors.primary} />}
+            />
+          ) : null}
           <Button 
             title="Hapus Dokumen" 
             variant="danger" 

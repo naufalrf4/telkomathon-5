@@ -36,7 +36,9 @@ const groupRecommendations = (recommendations: LearningRecommendation[]) => {
 export default function PersonalizeScreen() {
   const { syllabusId } = useLocalSearchParams();
   const router = useRouter();
-  const { personalize, isPersonalizing, personalization } = useSyllabus(syllabusId as string);
+  const { personalize, isPersonalizing, personalization } = useSyllabus(syllabusId as string, {
+    includePersonalization: true,
+  });
 
   const [gaps, setGaps] = useState<CompetencyGap[]>([
     { skill: '', current_level: 1, required_level: 3, gap_description: '' }

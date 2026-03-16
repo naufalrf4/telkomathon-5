@@ -16,8 +16,7 @@ interface MenuItem {
 
 const MENU_ITEMS: MenuItem[] = [
   { href: '/', label: 'Dashboard', icon: 'grid-outline', matchExact: true },
-  { href: '/documents', label: 'Documents', icon: 'document-text-outline' },
-  { href: '/syllabus', label: 'Syllabus', icon: 'school-outline' },
+  { href: '/syllabus/generated', label: 'Syllabus', icon: 'library-outline' },
 ];
 
 export function BottomNav() {

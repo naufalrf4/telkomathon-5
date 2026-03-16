@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, ScrollView, useWindowDimensions, Pressable, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSyllabus } from '../../src/hooks/useSyllabus';
+import { getErrorMessage } from '../../src/services/api';
 import { Card } from '../../src/components/ui/Card';
 import { Button } from '../../src/components/ui/Button';
 import { Badge } from '../../src/components/ui/Badge';
@@ -9,18 +10,30 @@ import { LoadingSpinner } from '../../src/components/ui/LoadingSpinner';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../src/theme/colors';
+import { getSyllabusStatusLabel, getSyllabusStatusVariant, syllabusTitle } from '../../src/utils/syllabus';
 
 const LEVEL_LABELS: Record<number, string> = {
   1: 'Pemula', 2: 'Dasar', 3: 'Menengah', 4: 'Lanjutan', 5: 'Ahli'
 };
 
 export default function SyllabusListScreen() {
-  const { syllabi, isLoading } = useSyllabus();
+  const { syllabi, isLoading, error, refetch } = useSyllabus();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
 
   if (isLoading) return <LoadingSpinner fullScreen message="Memuat silabus..." />;
+
+  if (error && !syllabi) {
+    return (
+      <EmptyState
+        title="Gagal memuat daftar silabus"
+        description={getErrorMessage(error, 'Daftar silabus belum dapat dimuat. Coba lagi.')}
+        icon="alert-circle-outline"
+        action={{ label: 'Coba Lagi', onPress: () => void refetch() }}
+      />
+    );
+  }
 
   const hasSyllabi = syllabi && syllabi.length > 0;
 
@@ -28,15 +41,27 @@ export default function SyllabusListScreen() {
     <View className="flex-1 bg-gray-50 relative">
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: isDesktop ? 0 : 100 }}>
         <View className="p-6 max-w-7xl mx-auto w-full">
+          {error ? (
+            <Card className="mb-6 border border-amber-200 bg-amber-50">
+              <View className="flex-row items-start justify-between gap-4">
+                <View className="flex-1 gap-1">
+                  <Text className="font-semibold text-amber-700">Beberapa data silabus mungkin belum terbaru</Text>
+                  <Text className="text-amber-700">{getErrorMessage(error, 'Terjadi masalah saat menyegarkan daftar silabus.')}</Text>
+                </View>
+                <Button title="Muat Ulang" variant="outline" onPress={() => void refetch()} />
+              </View>
+            </Card>
+          ) : null}
+
           <View className="flex-row justify-between items-center mb-8">
             <View>
               <Text className="text-3xl font-bold text-gray-900">Silabus Saya</Text>
-              <Text className="text-gray-500 mt-1">Kelola dan atur kurikulum yang dibuat oleh AI</Text>
+              <Text className="text-gray-500 mt-1">Koleksi syllabus final yang siap direvisi, dipersonalisasi, dan diekspor.</Text>
             </View>
             {isDesktop && (
               <Button 
                 title="Buat Baru" 
-                onPress={() => router.push('/syllabus/generate')} 
+                onPress={() => router.push('/syllabus/create')} 
                 icon={<Ionicons name="add-circle" size={20} color="white" />}
                 className="shadow-sm"
               />
@@ -48,7 +73,7 @@ export default function SyllabusListScreen() {
               title="Belum ada silabus" 
               description="Mulai dengan membuat silabus baru dari dokumen yang telah diunggah."
               icon="school-outline"
-              action={isDesktop ? { label: "Buat Silabus Pertama", onPress: () => router.push('/syllabus/generate') } : undefined}
+              action={isDesktop ? { label: 'Buat Silabus Pertama', onPress: () => router.push('/syllabus/create') } : undefined}
             />
           ) : (
             <View className="flex-row flex-wrap -mx-3">
@@ -62,13 +87,13 @@ export default function SyllabusListScreen() {
                         className="opacity-90"
                       />
                       <Badge 
-                        label={item.status} 
-                        variant={item.status === 'completed' ? 'success' : 'warning'} 
+                        label={getSyllabusStatusLabel(item.status)} 
+                        variant={getSyllabusStatusVariant(item.status)} 
                       />
                     </View>
                     
                     <Text className="text-xl font-bold text-gray-900 mb-2 leading-tight" numberOfLines={2}>
-                      {item.topic}
+                      {syllabusTitle(item)}
                     </Text>
                     
                     <Text className="text-gray-500 text-sm mb-4 leading-relaxed h-10" numberOfLines={2}>
@@ -105,7 +130,7 @@ export default function SyllabusListScreen() {
       
       {!isDesktop && (
         <Pressable
-          onPress={() => router.push('/syllabus/generate')}
+          onPress={() => router.push('/syllabus/create')}
           style={[{ bottom: 80, right: 24, zIndex: 999 }, Platform.OS === 'web' ? { position: 'fixed' as 'absolute' } : { position: 'absolute' }]}
           className="w-14 h-14 bg-primary rounded-full items-center justify-center shadow-lg active:scale-95"
         >

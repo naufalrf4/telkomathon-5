@@ -8,7 +8,7 @@ export function useDocuments() {
   const { data: documents, isLoading, error, refetch } = useQuery({
     queryKey: ['documents'],
     queryFn: async () => {
-      const res = await apiGet<{ documents: Document[]; total: number }>('/documents');
+      const res = await apiGet<{ documents: Document[]; total: number }>('/documents/');
       return res.documents;
     },
   });
@@ -29,6 +29,7 @@ export function useDocuments() {
     error,
     refetch,
     uploadDocument: uploadMutation.mutate,
+    uploadDocumentAsync: uploadMutation.mutateAsync,
     isUploading: uploadMutation.isPending,
     deleteDocument: deleteMutation.mutate,
     isDeleting: deleteMutation.isPending,

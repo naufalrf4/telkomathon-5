@@ -1,9 +1,11 @@
 export interface Document {
   id: string;
   filename: string;
+  doc_type?: string;
   file_type: string;
   status: string;
   created_at: string;
+  chunk_count?: number;
 }
 
 export interface ELO {
@@ -17,15 +19,47 @@ export interface LearningJourney {
   after_learning: string[];
 }
 
+export interface RevisionHistoryEntry {
+  timestamp: string;
+  summary?: string | null;
+  reason?: string | null;
+  source_message_id?: string | null;
+  applied_fields: string[];
+  previous: {
+    tlo: string;
+    elos: ELO[];
+    journey: LearningJourney | null;
+  };
+}
+
 export interface Syllabus {
   id: string;
   topic: string;
   target_level: number;
   tlo: string;
   elos: ELO[];
-  journey: LearningJourney;
+  journey?: LearningJourney | null;
+   course_category?: string | null;
+   client_company_name?: string | null;
+   course_title?: string | null;
+   company_profile_summary?: string | null;
+   commercial_overview?: string | null;
+   performance_result?: string | null;
+   condition_result?: string | null;
+   standard_result?: string | null;
+   revision_history: RevisionHistoryEntry[];
   status: string;
   created_at: string;
+  updated_at?: string;
+}
+
+export interface ApplySyllabusRevisionPayload {
+  summary?: string;
+  tlo?: string;
+  elos?: ELO[];
+  journey?: LearningJourney;
+  reason?: string;
+  source_message_id?: string;
 }
 
 export interface CompetencyGap {
@@ -56,5 +90,6 @@ export interface ChatMessage {
   syllabus_id: string;
   role: 'user' | 'assistant';
   content: string;
+  revision_applied?: Record<string, unknown> | null;
   created_at: string;
 }

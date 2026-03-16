@@ -12,12 +12,23 @@ interface MenuItem {
   label: string;
   icon: IoniconsName;
   matchExact?: boolean;
+  children?: Array<{
+    href: Href;
+    label: string;
+  }>;
 }
 
 const MENU_ITEMS: MenuItem[] = [
   { href: '/', label: 'Dashboard', icon: 'grid-outline', matchExact: true },
-  { href: '/documents', label: 'Documents', icon: 'document-text-outline' },
-  { href: '/syllabus', label: 'Syllabus', icon: 'school-outline' },
+  {
+    href: '/syllabus',
+    label: 'Syllabus',
+    icon: 'library-outline',
+    children: [
+      { href: '/syllabus/create', label: 'Create' },
+      { href: '/syllabus/generated', label: 'Generated' },
+    ],
+  },
 ];
 
 function isMenuActive(pathname: string, href: string, exact?: boolean): boolean {
@@ -43,32 +54,51 @@ export function Sidebar() {
           {MENU_ITEMS.map((item) => {
             const active = isMenuActive(pathname, String(item.href), item.matchExact);
             return (
-              <Link key={String(item.href)} href={item.href} asChild>
-                <Pressable
-                  className={clsx(
-                    'flex-row items-center px-3 py-2.5 rounded-lg mb-0.5',
-                    active ? 'bg-red-50' : ''
-                  )}
-                >
-                  <Ionicons
-                    name={active ? (item.icon.replace('-outline', '') as IoniconsName) : item.icon}
-                    size={18}
-                    color={active ? colors.primary : '#9CA3AF'}
-                    style={{ marginRight: 10 }}
-                  />
-                  <Text
+              <View key={String(item.href)}>
+                <Link href={item.href} asChild>
+                  <Pressable
                     className={clsx(
-                      'text-sm',
-                      active ? 'text-primary font-semibold' : 'text-gray-500 font-medium'
+                      'flex-row items-center px-3 py-2.5 rounded-lg mb-0.5',
+                      active ? 'bg-red-50' : ''
                     )}
                   >
-                    {item.label}
-                  </Text>
-                  {active && (
-                    <View className="ml-auto w-1 h-5 bg-primary rounded-full" />
-                  )}
-                </Pressable>
-              </Link>
+                    <Ionicons
+                      name={active ? (item.icon.replace('-outline', '') as IoniconsName) : item.icon}
+                      size={18}
+                      color={active ? colors.primary : '#9CA3AF'}
+                      style={{ marginRight: 10 }}
+                    />
+                    <Text
+                      className={clsx(
+                        'text-sm',
+                        active ? 'text-primary font-semibold' : 'text-gray-500 font-medium'
+                      )}
+                    >
+                      {item.label}
+                    </Text>
+                    {active && (
+                      <View className="ml-auto w-1 h-5 bg-primary rounded-full" />
+                    )}
+                  </Pressable>
+                </Link>
+
+                {active && item.children?.length ? (
+                  <View className="mb-3 ml-6 mt-1 gap-1 border-l border-red-100 pl-4">
+                    {item.children.map((child) => {
+                      const childActive = pathname === child.href || pathname.startsWith(`${String(child.href)}/`);
+                      return (
+                        <Link key={String(child.href)} href={child.href} asChild>
+                          <Pressable className="rounded-md px-2 py-2">
+                            <Text className={clsx('text-sm', childActive ? 'font-semibold text-primary' : 'text-gray-500')}>
+                              {child.label}
+                            </Text>
+                          </Pressable>
+                        </Link>
+                      );
+                    })}
+                  </View>
+                ) : null}
+              </View>
             );
           })}
         </View>
