@@ -1,12 +1,13 @@
-# AI Planning & Agent Context (never commit)
-AGENTS.md
+# AI planning and local agent artifacts
 docs/
 .knowledge/
 .sisyphus/
 *.context.md
+.plans/
 
 # Environment & Secrets
 .env
+.env.prod
 .env.local
 .env.*.local
 
@@ -30,10 +31,12 @@ uploads/
 *.pdf
 *.docx
 *.pptx
+!be-fastapi/app/features/export/templates/*.docx
 
 # Node / Expo
 node_modules/
 .expo/
+fe-reactnative/.tmp/
 dist/
 web-build/
 expo-env.d.ts
