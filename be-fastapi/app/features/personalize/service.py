@@ -1,8 +1,6 @@
 import json
 import uuid
-from typing import cast
 
-from openai.types.chat import ChatCompletionMessageParam
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,16 +32,13 @@ class PersonalizeService:
         if syllabus is None:
             raise NotFoundException("Syllabus", str(syllabus_id))
 
-        syllabus_dict = {
-            "tlo": getattr(syllabus, "tlo"),
-            "elos": getattr(syllabus, "elos"),
-            "journey": getattr(syllabus, "journey"),
+        syllabus_dict: dict[str, object] = {
+            "tlo": syllabus.tlo,
+            "elos": syllabus.elos,
+            "journey": syllabus.journey,
         }
         gaps_as_dicts = [g.model_dump() for g in request.competency_gaps]
-        messages = cast(
-            list[ChatCompletionMessageParam],
-            build_personalize_prompt(syllabus_dict, gaps_as_dicts, ""),
-        )
+        messages = build_personalize_prompt(syllabus_dict, gaps_as_dicts, "")
 
         raw = await chat_complete(messages)
         if not isinstance(raw, str):
@@ -58,9 +53,9 @@ class PersonalizeService:
         recommendations = _normalize_recommendations(raw_recs)
 
         record = PersonalizationResult()
-        setattr(record, "syllabus_id", syllabus_id)
-        setattr(record, "competency_gaps", gaps_as_dicts)
-        setattr(record, "recommendations", [r.model_dump() for r in recommendations])
+        record.syllabus_id = syllabus_id
+        record.competency_gaps = gaps_as_dicts
+        record.recommendations = [r.model_dump() for r in recommendations]
         self.db.add(record)
         await self.db.flush()
         await self.db.refresh(record)

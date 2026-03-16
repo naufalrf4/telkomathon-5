@@ -1,17 +1,18 @@
 import asyncio
 from logging.config import fileConfig
 
-from alembic import context
-from sqlalchemy.ext.asyncio import async_engine_from_config
 from sqlalchemy import pool
+from sqlalchemy.engine import Connection
+from sqlalchemy.ext.asyncio import async_engine_from_config
 
+import app.features.chat.models  # noqa: F401
+import app.features.design_sessions.models  # noqa: F401
+import app.features.documents.models  # noqa: F401
+import app.features.personalize.models  # noqa: F401
+import app.features.syllabus.models  # noqa: F401
+from alembic import context
 from app.config import settings
 from app.database import Base
-
-import app.features.documents.models
-import app.features.syllabus.models
-import app.features.personalize.models
-import app.features.chat.models
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
@@ -22,7 +23,7 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
-def do_run_migrations(connection):
+def do_run_migrations(connection: Connection) -> None:
     context.configure(
         connection=connection,
         target_metadata=target_metadata,

@@ -15,6 +15,6 @@ class PersonalizationResult(Base):
     syllabus_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("generated_syllabi.id", ondelete="CASCADE"),
     )
-    competency_gaps: Mapped[dict] = mapped_column(JSONB)
-    recommendations: Mapped[dict] = mapped_column(JSONB)
+    competency_gaps: Mapped[list[dict[str, object]]] = mapped_column(JSONB)
+    recommendations: Mapped[list[dict[str, object]]] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)

@@ -46,20 +46,34 @@ class FileParseException(AppException):
         )
 
 
+class InvalidStepException(AppException):
+    def __init__(self, message: str) -> None:
+        super().__init__(
+            message=message,
+            code="INVALID_STEP",
+            status_code=409,
+        )
+
+
+class AlreadyFinalizedException(AppException):
+    def __init__(self, message: str = "Design session already finalized") -> None:
+        super().__init__(
+            message=message,
+            code="ALREADY_FINALIZED",
+            status_code=409,
+        )
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppException)
-    async def app_exception_handler(
-        request: Request, exc: AppException
-    ) -> JSONResponse:
+    async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code,
             content={"detail": exc.message, "status": "error", "code": exc.code},
         )
 
     @app.exception_handler(Exception)
-    async def generic_exception_handler(
-        request: Request, exc: Exception
-    ) -> JSONResponse:
+    async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         return JSONResponse(
             status_code=500,
             content={
