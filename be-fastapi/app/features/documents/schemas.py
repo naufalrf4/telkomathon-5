@@ -25,4 +25,4 @@ class DocumentListResponse(BaseModel):
 
 class DocumentDetailResponse(DocumentResponse):
     content_text: str
-    metadata_: dict
+    metadata_: dict[str, object]

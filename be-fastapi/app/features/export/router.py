@@ -2,16 +2,11 @@ import uuid
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import Response
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
+from app.features.export.dependencies import get_export_service
 from app.features.export.service import ExportService
 
-router = APIRouter(prefix="/export", tags=["export"])
-
-
-def get_export_service(db: AsyncSession = Depends(get_db)) -> ExportService:
-    return ExportService(db)
+router = APIRouter(tags=["export"])
 
 
 @router.get("/{syllabus_id}/pdf")

@@ -15,7 +15,7 @@ async def upload_document(
     file: UploadFile,
     doc_type: str = Form(...),
     service: DocumentService = Depends(get_document_service),
-) -> dict:
+) -> dict[str, object]:
     doc = await service.upload_document(file, doc_type)
     data = DocumentResponse.model_validate(doc)
     data.chunk_count = len(doc.chunks)
@@ -25,7 +25,7 @@ async def upload_document(
 @router.get("/")
 async def list_documents(
     service: DocumentService = Depends(get_document_service),
-) -> dict:
+) -> dict[str, object]:
     docs = await service.get_documents()
     items = []
     for doc in docs:
@@ -39,7 +39,7 @@ async def list_documents(
 async def get_document(
     document_id: uuid.UUID,
     service: DocumentService = Depends(get_document_service),
-) -> dict:
+) -> dict[str, object]:
     doc = await service.get_document(document_id)
     resp = DocumentDetailResponse.model_validate(doc)
     resp.chunk_count = len(doc.chunks)

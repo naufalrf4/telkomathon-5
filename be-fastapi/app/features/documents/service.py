@@ -10,7 +10,6 @@ from sqlalchemy.orm import selectinload
 from app.ai.embeddings import generate_embeddings_batch
 from app.config import settings
 from app.exceptions import (
-    AIServiceException,
     FileParseException,
     NotFoundException,
     ValidationException,
@@ -20,6 +19,7 @@ from app.utils.chunking import chunk_text
 from app.utils.file_parser import parse_file
 
 _ALLOWED_FORMATS = {"pdf", "docx", "pptx"}
+_ZERO_EMBEDDING = [0.0] * settings.EMBEDDING_DIMENSIONS
 
 
 class DocumentService:
@@ -38,7 +38,7 @@ class DocumentService:
         file_id = uuid.uuid4()
         file_path = upload_dir / f"{file_id}_{filename}"
         raw = await file.read()
-        await asyncio.to_thread(file_path.write_bytes, raw)
+        _ = await asyncio.to_thread(file_path.write_bytes, raw)
 
         doc = Document(
             filename=filename,
@@ -66,13 +66,19 @@ class DocumentService:
                 embeddings = await generate_embeddings_batch(
                     [c["text"] for c in chunks], batch_size=20
                 )
-            except Exception as exc:
-                doc.status = "failed"
-                raise AIServiceException("Failed to generate embeddings") from exc
+            except Exception:
+                embeddings = [_ZERO_EMBEDDING.copy() for _ in chunks]
+                metadata["embedding_fallback"] = True
+            else:
+                metadata["embedding_fallback"] = False
+
+            doc.metadata_ = metadata
 
             for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings, strict=True)):
                 chunk_meta = dict(chunk["metadata"])
                 chunk_meta["doc_type"] = doc_type
+                if metadata.get("embedding_fallback"):
+                    chunk_meta["embedding_fallback"] = True
                 self.db.add(
                     DocumentChunk(
                         document_id=doc.id,

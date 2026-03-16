@@ -1,7 +1,7 @@
 import uuid
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.embeddings import generate_embedding
@@ -16,14 +16,26 @@ async def retrieve_relevant_chunks(
     db: AsyncSession,
     top_k: int = 10,
 ) -> list[dict[str, Any]]:
-    query_embedding = await generate_embedding(query)
     doc_id_strings = [str(d) for d in doc_ids]
+    try:
+        query_embedding = await generate_embedding(query)
+    except Exception:
+        query_embedding = None
 
-    vector_results = await _vector_search(query_embedding, doc_id_strings, db, limit=20)
+    vector_results: list[dict[str, Any]] = []
+    if query_embedding is not None:
+        vector_results = await _vector_search(query_embedding, doc_id_strings, db, limit=20)
     fts_results = await _fulltext_search(query, doc_id_strings, db, limit=20)
 
     fused = _reciprocal_rank_fusion([vector_results, fts_results], top_n=top_k)
-    return [r for r in fused if r["score"] >= SIMILARITY_THRESHOLD]
+    filtered = [r for r in fused if r["score"] >= SIMILARITY_THRESHOLD]
+    if filtered:
+        return filtered
+    if fts_results:
+        return fts_results[:top_k]
+    if vector_results:
+        return vector_results[:top_k]
+    return []
 
 
 async def _vector_search(
@@ -37,10 +49,10 @@ async def _vector_search(
         SELECT id, chunk_text, metadata, document_id,
                1 - (embedding <=> :embedding::vector) AS score
         FROM document_chunks
-        WHERE document_id = ANY(:doc_ids::uuid[])
+        WHERE document_id IN :doc_ids
         ORDER BY embedding <=> :embedding::vector
         LIMIT :limit
-    """)
+    """).bindparams(bindparam("doc_ids", expanding=True))
     result = await db.execute(
         stmt,
         {"embedding": embedding_str, "doc_ids": doc_id_strings, "limit": limit},
@@ -67,14 +79,12 @@ async def _fulltext_search(
         SELECT id, chunk_text, metadata, document_id,
                ts_rank(to_tsvector('indonesian', chunk_text), plainto_tsquery('indonesian', :query)) AS score
         FROM document_chunks
-        WHERE document_id = ANY(:doc_ids::uuid[])
+        WHERE document_id IN :doc_ids
           AND to_tsvector('indonesian', chunk_text) @@ plainto_tsquery('indonesian', :query)
         ORDER BY score DESC
         LIMIT :limit
-    """)
-    result = await db.execute(
-        stmt, {"query": query, "doc_ids": doc_id_strings, "limit": limit}
-    )
+    """).bindparams(bindparam("doc_ids", expanding=True))
+    result = await db.execute(stmt, {"query": query, "doc_ids": doc_id_strings, "limit": limit})
     rows = result.fetchall()
     return [
         {

@@ -19,7 +19,7 @@ class Document(Base):
     content_text: Mapped[str] = mapped_column(Text, default="")
     file_path: Mapped[str] = mapped_column(String(500))
     status: Mapped[str] = mapped_column(String(20), default="ready")
-    metadata_: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+    metadata_: Mapped[dict[str, object]] = mapped_column("metadata", JSONB, default=dict)
     upload_date: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
     chunks: Mapped[list["DocumentChunk"]] = relationship(
@@ -37,8 +37,8 @@ class DocumentChunk(Base):
     )
     chunk_index: Mapped[int] = mapped_column(Integer)
     chunk_text: Mapped[str] = mapped_column(Text)
-    embedding: Mapped[list] = mapped_column(Vector(3072))
-    chunk_metadata: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+    embedding: Mapped[list[float]] = mapped_column(Vector(3072))
+    chunk_metadata: Mapped[dict[str, object]] = mapped_column("metadata", JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
     document: Mapped["Document"] = relationship(back_populates="chunks")
