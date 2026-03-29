@@ -70,46 +70,56 @@ def _build_fallback_syllabus_json(
             f"Peserta mampu menerapkan prinsip utama {topic} pada level {request.target_level}."
             f"{context_suffix}"
         ).strip(),
+        "performance_result": f"Menunjukkan penerapan {topic} pada simulasi atau konteks kerja yang relevan.",
+        "condition_result": (
+            "Dilaksanakan menggunakan dokumen perusahaan, studi kasus, diskusi terarah, dan refleksi fasilitator."
+        ),
+        "standard_result": (
+            "Hasil kerja akurat, relevan dengan kebutuhan organisasi, dan dapat ditindaklanjuti di pekerjaan."
+        ),
         "elos": [
             {
-                "elo": f"Menjelaskan konsep inti {topic} dan relevansinya di pekerjaan.",
-                "pce": [
-                    f"Performance: menjabarkan konsep utama {topic} secara runtut.",
-                    "Condition: menggunakan studi kasus, diskusi fasilitator, dan dokumen pendukung yang tersedia.",
-                    "Standard: penjelasan akurat, mudah dipahami, dan dapat diterapkan.",
-                ],
+                "elo": f"Mendefinisikan konsep inti {topic} dan istilah kunci yang digunakan dalam pembelajaran.",
             },
             {
-                "elo": f"Menganalisis kebutuhan implementasi {topic} pada situasi kerja nyata.",
-                "pce": [
-                    f"Performance: memetakan langkah implementasi {topic} untuk unit kerja sendiri.",
-                    "Condition: berdasarkan data, konteks organisasi, dan prioritas operasional saat ini.",
-                    "Standard: analisis menghasilkan rekomendasi yang relevan dan dapat ditindaklanjuti.",
-                ],
+                "elo": f"Mengidentifikasi contoh dasar {topic} pada konteks kerja yang disediakan.",
             },
             {
-                "elo": f"Menyusun rencana aksi penerapan {topic} setelah pembelajaran selesai.",
-                "pce": [
-                    "Performance: membuat rencana aksi dan indikator keberhasilan awal.",
-                    "Condition: dikerjakan melalui refleksi, template tindak lanjut, dan umpan balik fasilitator.",
-                    "Standard: rencana aksi spesifik, terukur, dan memiliki target waktu yang jelas.",
-                ],
+                "elo": f"Menjelaskan hubungan antara {topic} dan kebutuhan operasional organisasi.",
+            },
+            {
+                "elo": f"Mengulang kembali urutan langkah dasar {topic} sesuai panduan fasilitator.",
+            },
+            {
+                "elo": f"Mendeskripsikan ide atau konsep utama {topic} dengan bahasa yang jelas dan tepat.",
             },
         ],
         "journey": {
-            "pre_learning": [
-                f"Mempelajari pengantar singkat mengenai {topic}.",
-                "Mengidentifikasi tantangan kerja yang ingin diselesaikan melalui pembelajaran ini.",
-            ],
-            "classroom": [
-                f"Diskusi terarah mengenai konsep inti dan praktik {topic}.",
-                "Latihan studi kasus dan umpan balik fasilitator.",
-                "Refleksi kelompok untuk menyepakati langkah implementasi pascapelatihan.",
-            ],
-            "after_learning": [
-                f"Menjalankan rencana aksi penerapan {topic} di pekerjaan.",
-                "Mengevaluasi hasil awal bersama atasan atau mentor kerja.",
-            ],
+            "pre_learning": {
+                "duration": "60 menit",
+                "description": f"Peserta menyiapkan konteks awal dan kosa kata utama terkait {topic}.",
+                "content": [
+                    f"Mempelajari pengantar singkat mengenai {topic}.",
+                    "Mengidentifikasi tantangan kerja yang ingin diselesaikan melalui pembelajaran ini.",
+                ],
+            },
+            "classroom": {
+                "duration": "240 menit",
+                "description": f"Peserta berlatih menerapkan {topic} melalui diskusi, studi kasus, dan umpan balik terarah.",
+                "content": [
+                    f"Diskusi terarah mengenai konsep inti dan praktik {topic}.",
+                    "Latihan studi kasus dan umpan balik fasilitator.",
+                    "Refleksi kelompok untuk menyepakati langkah implementasi pascapelatihan.",
+                ],
+            },
+            "after_learning": {
+                "duration": "120 menit",
+                "description": f"Peserta menerjemahkan hasil belajar {topic} menjadi aksi kerja nyata.",
+                "content": [
+                    f"Menjalankan rencana aksi penerapan {topic} di pekerjaan.",
+                    "Mengevaluasi hasil awal bersama atasan atau mentor kerja.",
+                ],
+            },
         },
         "generation_notes": {
             "mode": "fallback",

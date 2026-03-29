@@ -1,6 +1,6 @@
 import uuid
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, cast
 
 from sqlalchemy import select
@@ -27,8 +27,11 @@ class SyllabusService:
             target_level=request.target_level,
             course_title=request.topic,
             tlo=str(parsed["tlo"]),
-            elos=parsed["elos"],
-            journey=parsed["journey"],
+            performance_result=self._normalize_optional_text(parsed.get("performance_result")),
+            condition_result=self._normalize_optional_text(parsed.get("condition_result")),
+            standard_result=self._normalize_optional_text(parsed.get("standard_result")),
+            elos=self._normalize_elos(parsed.get("elos")),
+            journey=self._normalize_journey(parsed.get("journey")),
             source_doc_ids=[str(d) for d in request.doc_ids],
             revision_history=[],
             status="draft",
@@ -63,36 +66,55 @@ class SyllabusService:
         source_message_id: uuid.UUID | None = None,
     ) -> GeneratedSyllabus:
         syllabus = await self.get_syllabus(syllabus_id)
-        applied_fields = [key for key in ("tlo", "elos", "journey") if key in data]
+        applied_fields = [
+            key
+            for key in (
+                "tlo",
+                "performance_result",
+                "condition_result",
+                "standard_result",
+                "elos",
+                "journey",
+            )
+            if key in data
+        ]
         if not applied_fields:
             raise ValidationException("At least one syllabus field must be updated")
+
         history: list[dict[str, object]] = list(syllabus.revision_history or [])
-        snapshot: dict[str, object] = {
-            "tlo": syllabus.tlo,
-            "elos": syllabus.elos,
-            "journey": syllabus.journey,
-            "revised_at": datetime.utcnow().isoformat(),
-            "summary": summary,
-            "reason": reason,
-            "source_message_id": str(source_message_id) if source_message_id else None,
-            "applied_fields": applied_fields,
-        }
-        history.append(snapshot)
+        history.append(
+            {
+                "tlo": syllabus.tlo,
+                "performance_result": syllabus.performance_result or "",
+                "condition_result": syllabus.condition_result or "",
+                "standard_result": syllabus.standard_result or "",
+                "elos": syllabus.elos,
+                "journey": syllabus.journey,
+                "revised_at": datetime.now(UTC).isoformat(),
+                "summary": summary,
+                "reason": reason,
+                "source_message_id": str(source_message_id) if source_message_id else None,
+                "applied_fields": applied_fields,
+            }
+        )
+
         if "tlo" in data:
             tlo_value = str(data["tlo"]).strip()
             if not tlo_value:
                 raise ValidationException("tlo must not be empty")
             syllabus.tlo = tlo_value
+
+        for field_name in ("performance_result", "condition_result", "standard_result"):
+            if field_name in data:
+                setattr(syllabus, field_name, self._normalize_optional_text(data[field_name]))
+
         if "elos" in data:
-            elos_value = data["elos"]
-            if not isinstance(elos_value, list):
-                raise ValidationException("elos must be a list")
-            syllabus.elos = elos_value
+            syllabus.elos = self._normalize_elos(data["elos"])
+
         if "journey" in data:
-            journey_value = data["journey"]
-            if not isinstance(journey_value, dict):
-                raise ValidationException("journey must be an object")
+            journey_value: dict[str, object] = self._normalize_journey(data["journey"])
             syllabus.journey = journey_value
+
         syllabus.revision_history = history
         syllabus.updated_at = datetime.utcnow()
         await self.db.flush()
@@ -107,6 +129,12 @@ class SyllabusService:
         update_data: dict[str, object] = {}
         if request.tlo is not None:
             update_data["tlo"] = request.tlo
+        if request.performance_result is not None:
+            update_data["performance_result"] = request.performance_result
+        if request.condition_result is not None:
+            update_data["condition_result"] = request.condition_result
+        if request.standard_result is not None:
+            update_data["standard_result"] = request.standard_result
         if request.elos is not None:
             update_data["elos"] = [item.model_dump() for item in request.elos]
         if request.journey is not None:
@@ -158,8 +186,8 @@ class SyllabusService:
             performance_result=self._normalize_optional_text(performance_result),
             condition_result=self._normalize_optional_text(condition_result),
             standard_result=self._normalize_optional_text(standard_result),
-            elos=list(elos),
-            journey=self._build_default_journey(topic, tlo),
+            elos=self._normalize_elos(elos),
+            journey=self._build_default_journey(topic, tlo, performance_result),
             source_doc_ids=list(source_doc_ids),
             revision_history=[],
             status="finalized",
@@ -185,32 +213,111 @@ class SyllabusService:
         if message.syllabus_id != syllabus_id:
             raise ValidationException("Chat message does not belong to the target syllabus")
         message.revision_applied = {
-            "applied_at": datetime.utcnow().isoformat(),
+            "applied_at": datetime.now(UTC).isoformat(),
             "summary": summary,
             "reason": reason,
             "applied_fields": applied_fields,
         }
         await self.db.flush()
 
-    def _normalize_optional_text(self, value: str | None) -> str | None:
+    def _normalize_optional_text(self, value: object) -> str | None:
         if value is None:
             return None
-        normalized = value.strip()
+        normalized = str(value).strip()
         return normalized or None
 
-    def _build_default_journey(self, topic: str, tlo: str) -> dict[str, list[str]]:
+    def _normalize_elos(self, value: object) -> list[dict[str, object]]:
+        if not isinstance(value, Sequence) or isinstance(value, str | bytes):
+            raise ValidationException("elos must be a list")
+
+        normalized: list[dict[str, object]] = []
+        for item in value:
+            if not isinstance(item, dict):
+                raise ValidationException("Each ELO must be an object")
+            elo_text = str(item.get("elo", "")).strip()
+            if not elo_text:
+                raise ValidationException("Each ELO must include non-empty elo text")
+            normalized.append({"elo": elo_text})
+
+        if not normalized:
+            raise ValidationException("elos must not be empty")
+        return normalized
+
+    def _normalize_journey(self, value: object) -> dict[str, object]:
+        raw = value if isinstance(value, dict) else {}
         return {
-            "pre_learning": [
-                f"Mempelajari ringkasan materi inti tentang {topic}.",
-                f"Mengidentifikasi konteks kerja yang relevan terhadap tujuan '{tlo}'.",
-            ],
-            "classroom": [
-                f"Diskusi fasilitator untuk mengurai tujuan pembelajaran {topic}.",
-                f"Latihan terarah untuk mempraktikkan '{tlo}'.",
-                f"Refleksi kelompok atas penerapan {topic} di lingkungan kerja.",
-            ],
-            "after_learning": [
-                f"Menyusun rencana tindak lanjut penerapan {topic}.",
-                "Melakukan evaluasi dampak awal bersama atasan atau mentor.",
-            ],
+            "pre_learning": self._normalize_stage(raw.get("pre_learning"), "Pra-pembelajaran"),
+            "classroom": self._normalize_stage(raw.get("classroom"), "Sesi kelas"),
+            "after_learning": self._normalize_stage(
+                raw.get("after_learning"), "Pasca-pembelajaran"
+            ),
+        }
+
+    def _normalize_stage(self, value: object, fallback_description: str) -> dict[str, object]:
+        if isinstance(value, dict):
+            content_value = value.get("content")
+            content = (
+                [
+                    str(item).strip()
+                    for item in content_value
+                    if isinstance(item, str) and str(item).strip()
+                ]
+                if isinstance(content_value, list)
+                else []
+            )
+            return {
+                "duration": str(value.get("duration", "")).strip(),
+                "description": str(value.get("description", fallback_description)).strip(),
+                "content": content,
+            }
+
+        if isinstance(value, Sequence) and not isinstance(value, str | bytes):
+            content = [
+                str(item).strip() for item in value if isinstance(item, str) and str(item).strip()
+            ]
+            return {
+                "duration": "",
+                "description": fallback_description,
+                "content": content,
+            }
+
+        return {
+            "duration": "",
+            "description": fallback_description,
+            "content": [],
+        }
+
+    def _build_default_journey(
+        self,
+        topic: str,
+        tlo: str,
+        performance_result: str | None,
+    ) -> dict[str, object]:
+        focus = self._normalize_optional_text(performance_result) or tlo
+        return {
+            "pre_learning": {
+                "duration": "60 menit",
+                "description": f"Peserta membangun konteks awal dan kosa kata utama untuk {topic}.",
+                "content": [
+                    f"Meninjau ringkasan perusahaan dan konteks bisnis terkait {topic}.",
+                    f"Mengidentifikasi ekspektasi performa awal terhadap '{focus}'.",
+                ],
+            },
+            "classroom": {
+                "duration": "240 menit",
+                "description": f"Peserta berlatih menerapkan {topic} melalui diskusi, demonstrasi, dan studi kasus terarah.",
+                "content": [
+                    f"Membedah TLO dan contoh penerapan {topic} pada konteks kerja.",
+                    f"Latihan terstruktur untuk menunjukkan performa '{focus}'.",
+                    "Umpan balik fasilitator dan refleksi hasil praktik peserta.",
+                ],
+            },
+            "after_learning": {
+                "duration": "120 menit",
+                "description": f"Peserta mentransfer hasil belajar {topic} ke rencana aksi kerja nyata.",
+                "content": [
+                    f"Menyusun eksperimen penerapan {topic} di unit kerja masing-masing.",
+                    "Melakukan review hasil awal bersama atasan, mentor, atau fasilitator.",
+                ],
+            },
         }

@@ -92,8 +92,8 @@ async def test_update_course_context_resets_downstream_state(
         selected_tlo={"id": "tlo-1", "text": "TLO", "rationale": "ok"},
         performance_options=[{"id": "performance-1", "text": "Perf", "rationale": "ok"}],
         selected_performance={"id": "performance-1", "text": "Perf", "rationale": "ok"},
-        elo_options=[{"id": "elo-1", "elo": "ELO", "pce": ["A", "B"], "rationale": "ok"}],
-        selected_elos=[{"id": "elo-1", "elo": "ELO", "pce": ["A", "B"], "rationale": "ok"}],
+        elo_options=[{"id": "elo-1", "elo": "ELO", "rationale": "ok"}],
+        selected_elos=[{"id": "elo-1", "elo": "ELO", "rationale": "ok"}],
     )
 
     async def fake_get_session(_: object) -> DesignSession:
@@ -140,8 +140,8 @@ async def test_select_tlo_resets_downstream_state(monkeypatch: pytest.MonkeyPatc
         ],
         performance_options=[{"id": "performance-1", "text": "Perf", "rationale": "ok"}],
         selected_performance={"id": "performance-1", "text": "Perf", "rationale": "ok"},
-        elo_options=[{"id": "elo-1", "elo": "ELO", "pce": ["A", "B"], "rationale": "ok"}],
-        selected_elos=[{"id": "elo-1", "elo": "ELO", "pce": ["A", "B"], "rationale": "ok"}],
+        elo_options=[{"id": "elo-1", "elo": "ELO", "rationale": "ok"}],
+        selected_elos=[{"id": "elo-1", "elo": "ELO", "rationale": "ok"}],
     )
 
     async def fake_get_session(_: object) -> DesignSession:
@@ -174,8 +174,8 @@ async def test_select_performance_resets_elo_state(monkeypatch: pytest.MonkeyPat
             {"id": "performance-1", "text": "Perf 1", "rationale": "ok"},
             {"id": "performance-2", "text": "Perf 2", "rationale": "ok"},
         ],
-        elo_options=[{"id": "elo-1", "elo": "ELO", "pce": ["A", "B"], "rationale": "ok"}],
-        selected_elos=[{"id": "elo-1", "elo": "ELO", "pce": ["A", "B"], "rationale": "ok"}],
+        elo_options=[{"id": "elo-1", "elo": "ELO", "rationale": "ok"}],
+        selected_elos=[{"id": "elo-1", "elo": "ELO", "rationale": "ok"}],
     )
 
     async def fake_get_session(_: object) -> DesignSession:
@@ -194,6 +194,8 @@ async def test_select_performance_resets_elo_state(monkeypatch: pytest.MonkeyPat
     assert result.elo_options == []
     assert result.selected_elos == []
     assert result.finalized_syllabus_id is None
+    assert isinstance(getattr(result, "preview_condition_result", None), str)
+    assert isinstance(getattr(result, "preview_standard_result", None), str)
 
 
 @pytest.mark.asyncio
@@ -230,8 +232,12 @@ async def test_finalize_sets_syllabus_link(monkeypatch: pytest.MonkeyPatch) -> N
         document_ids=[str(uuid4())],
         wizard_step="elo_selected",
         source_summary={
-            "summary": "Business Profile (Dummy): Organization Context\nRingkasan Organisasi\nPerusahaan bergerak di layanan digital dan konektivitas. Fokus utama tahun berjalan adalah peningkatan kapabilitas talenta.",
+            "summary": "Business Profile (Dummy): Organization Context\nThe company operates in digital connectivity services and focuses on talent capability improvement.",
             "key_points": ["Poin 1"],
+            "company_profile_focus": [
+                "transformasi layanan digital lintas fungsi",
+                "peningkatan kapabilitas talenta organisasi",
+            ],
         },
         course_context={
             "topic": "Data Analytics",
@@ -244,7 +250,7 @@ async def test_finalize_sets_syllabus_link(monkeypatch: pytest.MonkeyPatch) -> N
         },
         selected_tlo={"id": "tlo-1", "text": "TLO", "rationale": "ok"},
         selected_performance={"id": "performance-1", "text": "Performance", "rationale": "ok"},
-        selected_elos=[{"id": "elo-1", "elo": "ELO 1", "pce": ["A", "B"], "rationale": "ok"}],
+        selected_elos=[{"id": "elo-1", "elo": "ELO 1", "rationale": "ok"}],
     )
     syllabus = GeneratedSyllabus(
         id=uuid4(),
@@ -259,8 +265,24 @@ async def test_finalize_sets_syllabus_link(monkeypatch: pytest.MonkeyPatch) -> N
         performance_result="Performance",
         condition_result="Condition",
         standard_result="Standard",
-        elos=[{"elo": "ELO 1", "pce": ["A", "B"]}],
-        journey={"pre_learning": [], "classroom": [], "after_learning": []},
+        elos=[{"elo": "ELO 1"}],
+        journey={
+            "pre_learning": {
+                "duration": "30 menit",
+                "description": "Persiapan awal",
+                "content": ["Review konsep"],
+            },
+            "classroom": {
+                "duration": "1 hari",
+                "description": "Workshop inti",
+                "content": ["Diskusi kasus"],
+            },
+            "after_learning": {
+                "duration": "1 minggu",
+                "description": "Implementasi",
+                "content": ["Rencana aksi"],
+            },
+        },
         source_doc_ids=[],
         revision_history=[],
         status="finalized",
@@ -290,7 +312,7 @@ async def test_finalize_sets_syllabus_link(monkeypatch: pytest.MonkeyPatch) -> N
     assert captured_kwargs["client_company_name"] == "PT Demo"
     assert captured_kwargs["course_title"] == "Data Analytics Bootcamp"
     assert captured_kwargs["company_profile_summary"] == (
-        "Perusahaan bergerak di layanan digital dan konektivitas. Fokus utama tahun berjalan adalah peningkatan kapabilitas talenta."
+        "Perusahaan memiliki konteks bisnis dan kebutuhan pembelajaran yang menjadi dasar penyusunan silabus. Fokus utama perusahaan mencakup transformasi layanan digital lintas fungsi dan peningkatan kapabilitas talenta organisasi."
     )
     assert captured_kwargs["commercial_overview"] == "Program akselerasi analitik."
     assert captured_kwargs["performance_result"] == "Performance"
@@ -306,13 +328,11 @@ def test_normalize_text_options_uses_prefix() -> None:
 
 def test_fallback_elo_options_return_multiple_entries() -> None:
     result = fallback_elo_options("Data Analytics", "Performance Focus")
-    assert len(result) == 3
+    assert len(result) == 5
     for item in result:
         item_id = item.get("id")
         assert isinstance(item_id, str)
         assert item_id.startswith("elo-")
-
-        pce = cast(list[str], item.get("pce"))
-        assert isinstance(pce, list)
-        assert all(isinstance(point, str) for point in pce)
-        assert len(pce) >= 2
+        elo = cast(str, item.get("elo"))
+        assert isinstance(elo, str)
+        assert elo

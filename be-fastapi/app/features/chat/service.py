@@ -72,19 +72,26 @@ class ChatService:
 
         syllabus_dict: dict[str, object] = {
             "tlo": syllabus.tlo,
+            "performance_result": syllabus.performance_result,
+            "condition_result": syllabus.condition_result,
+            "standard_result": syllabus.standard_result,
             "elos": syllabus.elos,
             "journey": syllabus.journey,
         }
         messages = build_revision_prompt(syllabus_dict, content, conversation_history)
-        stream_response = await chat_complete(messages, stream=True)
-        if isinstance(stream_response, str):
-            raise AIServiceException("Unexpected non-streaming response from LLM")
-        stream: AsyncIterator[str] = stream_response
+        try:
+            stream_response = await chat_complete(messages, stream=True)
+            if isinstance(stream_response, str):
+                raise AIServiceException("Unexpected non-streaming response from LLM")
+            stream: AsyncIterator[str] = stream_response
 
-        full_response = ""
-        async for chunk in stream:
-            full_response += chunk
-            yield chunk
+            full_response = ""
+            async for chunk in stream:
+                full_response += chunk
+                yield chunk
+        except AIServiceException:
+            full_response = self._fallback_revision_response(syllabus)
+            yield full_response
 
         assistant_msg = ChatMessage()
         assistant_msg.syllabus_id = syllabus_id
@@ -93,5 +100,28 @@ class ChatService:
         assistant_msg.revision_applied = None
         self.db.add(assistant_msg)
         await self.db.flush()
+        await self.db.commit()
 
         yield "__DONE__"
+
+    def _fallback_revision_response(self, syllabus: GeneratedSyllabus) -> str:
+        performance = syllabus.performance_result or "Performance result saat ini belum tersedia."
+        condition = syllabus.condition_result or "Condition saat ini belum tersedia."
+        standard = syllabus.standard_result or "Standard saat ini belum tersedia."
+        elo_lines = [
+            f"- {str(item.get('elo', '')).strip()}"
+            for item in (syllabus.elos or [])
+            if isinstance(item, dict) and str(item.get("elo", "")).strip()
+        ]
+        elo_section = "\n".join(elo_lines) if elo_lines else "- Belum ada ELO yang tersimpan."
+
+        return (
+            "Saran revisi sementara (fallback):\n"
+            f"TLO saat ini: {syllabus.tlo}\n"
+            f"Performance: {performance}\n"
+            f"Condition: {condition}\n"
+            f"Standard: {standard}\n"
+            "ELO saat ini:\n"
+            f"{elo_section}\n"
+            "Silakan gunakan workspace revision untuk memperbarui field yang diperlukan secara manual sambil koneksi AI tidak tersedia."
+        )

@@ -26,7 +26,7 @@ class GeneratedSyllabus(Base):
     condition_result: Mapped[str | None] = mapped_column(Text, nullable=True)
     standard_result: Mapped[str | None] = mapped_column(Text, nullable=True)
     elos: Mapped[list[dict[str, object]]] = mapped_column(JSONB)
-    journey: Mapped[dict[str, list[str]]] = mapped_column(JSONB)
+    journey: Mapped[dict[str, object]] = mapped_column(JSONB)
     source_doc_ids: Mapped[list[str]] = mapped_column(JSONB, default=list)
     revision_history: Mapped[list[dict[str, object]]] = mapped_column(JSONB, default=list)
     status: Mapped[str] = mapped_column(String(20), default="draft")

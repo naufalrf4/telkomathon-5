@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import ClassVar
+from typing import Any, ClassVar, cast
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
@@ -19,6 +19,7 @@ class DesignSessionCreateRequest(BaseModel):
 class SourceSummaryResponse(BaseModel):
     summary: str
     key_points: list[str]
+    company_profile_focus: list[str] = []
 
 
 class CourseContextRequest(BaseModel):
@@ -68,7 +69,6 @@ class PerformanceOptionResponse(BaseModel):
 class ELOOptionResponse(BaseModel):
     id: str
     elo: str
-    pce: list[str]
     rationale: str
 
 
@@ -84,6 +84,8 @@ class DesignSessionResponse(BaseModel):
     selected_tlo: TLOOptionResponse | None
     performance_options: list[PerformanceOptionResponse]
     selected_performance: PerformanceOptionResponse | None
+    preview_condition_result: str | None = None
+    preview_standard_result: str | None = None
     elo_options: list[ELOOptionResponse]
     selected_elos: list[ELOOptionResponse]
     finalized_syllabus_id: uuid.UUID | None
@@ -92,16 +94,16 @@ class DesignSessionResponse(BaseModel):
 
     @classmethod
     def from_orm_with_coerce(cls, obj: object) -> "DesignSessionResponse":
-        values = vars(obj)
-        source_summary_value = values.get("source_summary")
-        course_context_value = values.get("course_context")
-        selected_tlo_value = values.get("selected_tlo")
-        selected_performance_value = values.get("selected_performance")
+        model = cast(Any, obj)
+        source_summary_value = model.source_summary
+        course_context_value = model.course_context
+        selected_tlo_value = model.selected_tlo
+        selected_performance_value = model.selected_performance
 
         raw = {
-            "id": values["id"],
-            "document_ids": [uuid.UUID(str(item)) for item in values.get("document_ids", [])],
-            "wizard_step": values["wizard_step"],
+            "id": model.id,
+            "document_ids": [uuid.UUID(str(item)) for item in model.document_ids or []],
+            "wizard_step": model.wizard_step,
             "source_summary": (
                 SourceSummaryResponse(**source_summary_value)
                 if isinstance(source_summary_value, dict)
@@ -113,7 +115,9 @@ class DesignSessionResponse(BaseModel):
                 else None
             ),
             "tlo_options": [
-                TLOOptionResponse(**item) for item in values.get("tlo_options", []) or []
+                TLOOptionResponse(**item)
+                for item in model.tlo_options or []
+                if isinstance(item, dict)
             ],
             "selected_tlo": (
                 TLOOptionResponse(**selected_tlo_value)
@@ -122,21 +126,28 @@ class DesignSessionResponse(BaseModel):
             ),
             "performance_options": [
                 PerformanceOptionResponse(**item)
-                for item in values.get("performance_options", []) or []
+                for item in model.performance_options or []
+                if isinstance(item, dict)
             ],
             "selected_performance": (
                 PerformanceOptionResponse(**selected_performance_value)
                 if isinstance(selected_performance_value, dict)
                 else None
             ),
+            "preview_condition_result": getattr(model, "preview_condition_result", None),
+            "preview_standard_result": getattr(model, "preview_standard_result", None),
             "elo_options": [
-                ELOOptionResponse(**item) for item in values.get("elo_options", []) or []
+                ELOOptionResponse(**item)
+                for item in model.elo_options or []
+                if isinstance(item, dict)
             ],
             "selected_elos": [
-                ELOOptionResponse(**item) for item in values.get("selected_elos", []) or []
+                ELOOptionResponse(**item)
+                for item in model.selected_elos or []
+                if isinstance(item, dict)
             ],
-            "finalized_syllabus_id": values.get("finalized_syllabus_id"),
-            "created_at": values["created_at"],
-            "updated_at": values["updated_at"],
+            "finalized_syllabus_id": model.finalized_syllabus_id,
+            "created_at": model.created_at,
+            "updated_at": model.updated_at,
         }
         return cls.model_validate(raw)

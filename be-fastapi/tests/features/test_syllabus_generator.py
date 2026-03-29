@@ -61,5 +61,5 @@ async def test_generate_syllabus_stream_falls_back_on_ai_error(
     assert payload["generation_notes"]["mode"] == "fallback"
     assert "DeploymentNotFound" in str(payload["generation_notes"]["reason"])
     assert payload["tlo"].startswith("Peserta mampu menerapkan prinsip utama Audit Flow")
-    assert len(payload["elos"]) == 3
+    assert len(payload["elos"]) == 5
     assert chunks[1].startswith("\n__DONE__:")

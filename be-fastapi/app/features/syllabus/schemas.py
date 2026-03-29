@@ -21,17 +21,25 @@ class SyllabusGenerateRequest(BaseModel):
 
 class ELO(BaseModel):
     elo: str
-    pce: list[str]
+
+
+class LearningJourneyStage(BaseModel):
+    duration: str = ""
+    description: str = ""
+    content: list[str] = Field(default_factory=list)
 
 
 class LearningJourney(BaseModel):
-    pre_learning: list[str]
-    classroom: list[str]
-    after_learning: list[str]
+    pre_learning: LearningJourneyStage
+    classroom: LearningJourneyStage
+    after_learning: LearningJourneyStage
 
 
 class RevisionHistoryEntry(BaseModel):
     tlo: str
+    performance_result: str = ""
+    condition_result: str = ""
+    standard_result: str = ""
     elos: list[ELO]
     journey: LearningJourney
     revised_at: datetime
@@ -44,6 +52,9 @@ class RevisionHistoryEntry(BaseModel):
 class SyllabusRevisionApplyRequest(BaseModel):
     summary: str = ""
     tlo: str | None = None
+    performance_result: str | None = None
+    condition_result: str | None = None
+    standard_result: str | None = None
     elos: list[ELO] | None = None
     journey: LearningJourney | None = None
     reason: str = ""
@@ -51,7 +62,14 @@ class SyllabusRevisionApplyRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_has_changes(self) -> "SyllabusRevisionApplyRequest":
-        if self.tlo is None and self.elos is None and self.journey is None:
+        if (
+            self.tlo is None
+            and self.performance_result is None
+            and self.condition_result is None
+            and self.standard_result is None
+            and self.elos is None
+            and self.journey is None
+        ):
             raise ValueError("At least one revision field must be provided")
         return self
 
@@ -62,6 +80,7 @@ class SyllabusResponse(BaseModel):
     id: uuid.UUID
     topic: str
     target_level: int
+    course_expertise_level: str
     course_category: str | None = None
     client_company_name: str | None = None
     course_title: str | None = None
@@ -85,6 +104,7 @@ class SyllabusResponse(BaseModel):
             "id": model.id,
             "topic": model.topic,
             "target_level": model.target_level,
+            "course_expertise_level": _course_expertise_level(model.target_level),
             "course_category": model.course_category,
             "client_company_name": model.client_company_name,
             "course_title": model.course_title,
@@ -95,12 +115,15 @@ class SyllabusResponse(BaseModel):
             "condition_result": model.condition_result,
             "standard_result": model.standard_result,
             "elos": [ELO(**e) for e in model.elos],
-            "journey": LearningJourney(**model.journey),
+            "journey": LearningJourney.model_validate(_coerce_journey(model.journey)),
             "revision_history": [
                 RevisionHistoryEntry(
                     tlo=str(entry.get("tlo", "")),
+                    performance_result=str(entry.get("performance_result", "")),
+                    condition_result=str(entry.get("condition_result", "")),
+                    standard_result=str(entry.get("standard_result", "")),
                     elos=[ELO(**item) for item in entry.get("elos", []) if isinstance(item, dict)],
-                    journey=LearningJourney(**entry.get("journey", {})),
+                    journey=LearningJourney.model_validate(_coerce_journey(entry.get("journey"))),
                     revised_at=datetime.fromisoformat(str(entry.get("revised_at"))),
                     summary=str(entry.get("summary", "")),
                     reason=str(entry.get("reason", "")),
@@ -128,3 +151,45 @@ class SyllabusResponse(BaseModel):
 class SyllabusListResponse(BaseModel):
     syllabi: list[SyllabusResponse]
     total: int
+
+
+def _coerce_journey(value: object) -> dict[str, object]:
+    raw = value if isinstance(value, dict) else {}
+    return {
+        "pre_learning": _coerce_stage(raw.get("pre_learning")),
+        "classroom": _coerce_stage(raw.get("classroom")),
+        "after_learning": _coerce_stage(raw.get("after_learning")),
+    }
+
+
+def _coerce_stage(value: object) -> dict[str, object]:
+    if isinstance(value, dict):
+        content = value.get("content")
+        return {
+            "duration": str(value.get("duration", "")),
+            "description": str(value.get("description", "")),
+            "content": [str(item) for item in content if isinstance(item, str)]
+            if isinstance(content, list)
+            else [],
+        }
+
+    if isinstance(value, list):
+        normalized = [str(item) for item in value if isinstance(item, str)]
+        return {
+            "duration": "",
+            "description": normalized[0] if normalized else "",
+            "content": normalized,
+        }
+
+    return {"duration": "", "description": "", "content": []}
+
+
+def _course_expertise_level(target_level: int) -> str:
+    mapping = {
+        1: "Foundational",
+        2: "Elementary",
+        3: "Intermediate",
+        4: "Advanced",
+        5: "Expert",
+    }
+    return mapping.get(target_level, f"Level {target_level}")

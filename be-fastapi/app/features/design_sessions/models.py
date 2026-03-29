@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import ClassVar
 
 from sqlalchemy import String
 from sqlalchemy.dialects.postgresql import JSONB
@@ -10,6 +11,9 @@ from app.database import Base
 
 class DesignSession(Base):
     __tablename__ = "design_sessions"
+
+    preview_condition_result: ClassVar[str | None] = None
+    preview_standard_result: ClassVar[str | None] = None
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     document_ids: Mapped[list[str]] = mapped_column(JSONB, default=list)
