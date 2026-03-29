@@ -8,30 +8,35 @@ backend:
     - uv run pytest
   critical_coverage:
     - design session state transitions and downstream resets
-    - document parsing and upload flows
-    - syllabus finalization and export routes
+    - document parsing, upload, and embedding fallback flows
+    - legacy syllabus generation fallback and persistence
+    - structured syllabus revision application and provenance
+    - DOCX render/export routes and template output
   notes:
-    - 'be-fastapi/tests/features/test_design_sessions_service.py exists and should remain a key regression target.'
+    - "`be-fastapi/tests/features/test_design_sessions_service.py`, `test_documents_service.py`, `test_syllabus_generator.py`, `test_syllabus_service.py`, and `test_export_service.py` are key regression targets."
 
 frontend:
   repo_evidence:
     - Expo route screens and service layers are present
-    - 'No canonical `test`, `lint`, `typecheck`, or `build` script is defined in `fe-reactnative/package.json`.'
-  ad_hoc_verification_commands:
+    - "`npm run e2e` exists and maps to Playwright"
+    - "No canonical frontend lint/typecheck/build script is defined in `fe-reactnative/package.json` beyond Expo scripts and Playwright E2E"
+  verification_commands:
+    - npm run e2e
     - npx tsc --noEmit
     - npx expo export --platform web
-  minimum_verification_until_scripts_exist:
-    - Validate changed routes against the running app when possible
+  minimum_verification_until_more_scripts_exist:
+    - Validate changed routes against the running app or exported web build when possible
     - Prefer editor/LSP diagnostics for changed TypeScript files
     - Keep API contract changes aligned with backend route/state truth
   verified_manual_e2e:
-    - document list and ready-document session creation
+    - per-syllabus upload in create flow
     - design-session wizard progression through assist, course context, TLO, performance, ELO, and finalize
-    - finalized syllabus detail rendering and DOCX download
-    - runtime API override on exported web builds via query/localStorage
+    - structured revision workspace and apply flow
+    - DOCX preview and canonical DOCX download
+    - production proxy smoke on `/`, `/docs`, and `/api/v1/syllabi/`
 
 quality_gates:
-  - Do not claim a frontend test command exists unless it is added to the manifest.
+  - Do not claim a frontend script exists unless it is present in `fe-reactnative/package.json`.
   - Prefer backend contract tests for wizard behavior because backend owns session state.
-  - On the syllabus detail happy path, no eager `GET /personalize/{id}` request should fire unless the personalize route explicitly opts in.
-  - Update this file when canonical frontend verification commands are added.
+  - Export changes should verify both frontend preview behavior and backend DOCX output.
+  - Update this file when canonical frontend lint/typecheck/build scripts or CI workflows are added.

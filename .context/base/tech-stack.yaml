@@ -7,7 +7,7 @@ project:
 
 backend:
   language: Python
-  runtime: ">=3.11"
+  runtime: '>=3.11'
   package_manager: uv
   manifests:
     - be-fastapi/pyproject.toml
@@ -30,6 +30,7 @@ backend:
     - python-pptx 1.0.x
     - pdf2image 1.17.x
     - pytesseract 0.3.x
+    - docxtpl 0.20.x
     - WeasyPrint 63.x
   tooling:
     lint: Ruff 0.9.x
@@ -60,6 +61,7 @@ frontend:
       - android
       - ios
       - web
+      - e2e
     scripts_missing:
       - lint
       - test
@@ -75,3 +77,18 @@ local_runtime:
   notable_absences:
     - No frontend container is defined in docker-compose.yml
     - No repo CI workflow files were found
+
+production_runtime:
+  docker_compose:
+    file: docker-compose.prod.yml
+    services:
+      - db
+      - backend
+      - frontend
+      - proxy
+  frontend_container:
+    dockerfile: fe-reactnative/Dockerfile
+    serving: static Expo web export via nginx
+  proxy:
+    config: proxy/nginx.conf
+    exposure: only proxy publishes host port 8080 by default

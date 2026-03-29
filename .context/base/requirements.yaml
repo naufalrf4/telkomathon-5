@@ -1,9 +1,9 @@
 functional_requirements:
   - id: FR1
-    requirement: Support document upload and parsing for curriculum design inputs.
+    requirement: Support document upload and parsing for syllabus design inputs.
     evidence:
       - be-fastapi/app/features/documents
-      - fe-reactnative/app/documents
+      - fe-reactnative/app/design-session/new.tsx
   - id: FR2
     requirement: Support a stateful syllabus design wizard backed by backend-owned session state.
     evidence:
@@ -16,30 +16,43 @@ functional_requirements:
       - be-fastapi/app/features/design_sessions/service.py
       - fe-reactnative/src/services/designSessions.ts
   - id: FR4
-    requirement: Produce a finalized syllabus artifact that downstream syllabus, personalization, chat, and export flows can consume.
+    requirement: Persist finalized syllabus snapshots that downstream detail, revision, personalization, and export flows consume.
     evidence:
       - be-fastapi/app/features/syllabus
-      - be-fastapi/app/features/personalize
-      - be-fastapi/app/features/chat
-      - be-fastapi/app/features/export
+      - fe-reactnative/app/syllabus/[id].tsx
+      - fe-reactnative/src/hooks/useSyllabus.ts
   - id: FR5
-    requirement: Provide a canonical DOCX download route for finalized syllabi.
+    requirement: Provide explicit structured revision application for finalized syllabi.
     evidence:
       - be-fastapi/app/features/syllabus/router.py
-      - fe-reactnative/src/services/designSessions.ts
+      - be-fastapi/app/features/syllabus/service.py
+      - fe-reactnative/app/chat/[syllabusId].tsx
+  - id: FR6
+    requirement: Provide a canonical DOCX export route and matching preview flow for finalized syllabi.
+    evidence:
+      - be-fastapi/app/features/export/service.py
+      - be-fastapi/app/features/export/templates/syllabus_template.docx
+      - fe-reactnative/app/export/[syllabusId].tsx
+  - id: FR7
+    requirement: Support a production-style Docker deployment with separate proxy, frontend, backend, and database services.
+    evidence:
+      - docker-compose.prod.yml
+      - scripts/prod-up.sh
+      - proxy/nginx.conf
 
 quality_attributes:
-  - Backend state transitions must be deterministic and validated server-side.
-  - API behavior should use the documented `/api/v1` feature routes and structured error responses.
+  - Backend state transitions and revision mutations must be deterministic and validated server-side.
+  - Export output should render from finalized syllabus data without leaking stale placeholders or transient wizard-only context.
   - The web experience must remain usable in desktop and mobile layouts from the shared Expo shell.
-  - Durable agent memory must reflect verified repo truth, not stale planning assumptions.
+  - Steering docs must track repo truth for local dev, production deployment, and user-facing route shells.
 
 non_goals:
   - Building a production-grade auth or tenancy system without explicit repo evidence
-  - Replacing the current guided flow with a pure one-shot generation path
+  - Replacing the current guided flow with a pure one-shot generation-only path
   - Treating sensitive deployment helpers as ordinary application modules
 
 forbidden_changes:
   - Do not hardcode secrets or credentials in committed application code.
-  - Do not bypass backend wizard-step validation in the frontend.
+  - Do not bypass backend wizard-step or revision validation in the frontend.
   - Do not invent canonical commands, CI steps, or release workflows that are not repo-evident.
+  - Do not treat old `AI Space Silabus.docx` placeholder evidence as the active runtime template contract when `syllabus_template.docx` is the real export asset.

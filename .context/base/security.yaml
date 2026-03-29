@@ -9,18 +9,22 @@ secrets:
     - AZURE_OPENAI_ENDPOINT
     - AZURE_OPENAI_CHAT_DEPLOYMENT
     - AZURE_OPENAI_EMBEDDING_DEPLOYMENT
+  production_env_files:
+    - .env.prod.example
+    - .env.prod (local/runtime only, ignored)
   handling_rules:
-    - Keep secrets in `.env` files only.
+    - Keep secrets in `.env` files or deployment secret stores only.
     - Never hardcode secrets into committed application code.
     - Treat `server.py` as a sensitive local helper because it contains deployment credentials.
 
 data_sensitivity:
   categories:
-    - uploaded reference documents
+    - uploaded source documents
     - generated syllabus content
-    - AI-generated summaries and learning outcomes
+    - AI-generated summaries, outcomes, and revision notes
   storage_clues:
     - backend uploads directory defaults to `uploads`
+    - production Docker stack persists uploads in `uploads_prod`
     - database connection uses PostgreSQL with pgvector
 
 api_surface:
@@ -32,6 +36,7 @@ api_surface:
       - apiBaseUrl query parameter
       - localStorage['mydigilearn.apiBaseUrl']
       - EXPO_PUBLIC_API_URL
+      - browser-derived relative /api/v1 fallback
   cors:
     source: be-fastapi/app/config.py
     default_origins:
@@ -41,10 +46,22 @@ api_surface:
       - http://127.0.0.1:8081
       - http://localhost:19006
       - http://127.0.0.1:19006
-    note: Additional origins such as custom manual-test ports must be supplied via `CORS_ALLOWED_ORIGINS`.
+    note: Additional origins, including prod-like local proxy ports, must be supplied via `CORS_ALLOWED_ORIGINS` when not using same-origin proxying.
+
+deployment_surface:
+  local_dev:
+    file: docker-compose.yml
+    exposed_ports:
+      - 5432
+      - 8000
+  production_style:
+    file: docker-compose.prod.yml
+    exposed_public_service: proxy
+    default_public_port: 8080
+    note: Postgres is intentionally not published in the prod compose file.
 
 security_requirements:
-  - Preserve backend-owned validation for wizard step transitions.
+  - Preserve backend-owned validation for wizard transitions and explicit revision mutations.
   - Keep runtime API base overrides limited to trusted local or deployment-controlled configuration.
-  - Keep sensitive helper files out of normal implementation scope.
-  - Document any future auth, RBAC, or deployment changes here as soon as they become durable project truth.
+  - Keep sensitive helper files and ignored local env files out of normal implementation scope.
+  - Document future auth, RBAC, HTTPS, secret-rotation, or observability changes here as soon as they become durable repo truth.

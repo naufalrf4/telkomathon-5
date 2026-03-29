@@ -62,3 +62,13 @@
   - Export polish had to happen at two layers: the DOCX template asset itself and backend snapshot sanitization. `DesignSessionService` now strips stray leading `$` markers and removes boilerplate lines like `Business Profile (Dummy)`, `Organization Context`, and `Ringkasan Organisasi` from the company profile snapshot before finalization/export.
   - The frontend export preview no longer shows a powered-by footer or AI-branded preview header, reducing mismatch between preview and final DOCX.
   - Verified with targeted backend Ruff, targeted pytest (`test_design_sessions_service.py` and `test_export_service.py`), frontend `npx tsc --noEmit`, and a fresh live audit via `be-fastapi/tmp_docx_polish_audit.py` on the running Docker stack. The live audit created a new syllabus, applied a revision, downloaded DOCX successfully (`278113` bytes), and asserted that the exported XML no longer contained `$Digital Literacy & Awareness`, the AI note string, `Business Profile (Dummy)`, `Organization Context`, or `Ringkasan Organisasi`.
+
+## 2026-03-16 - Steering docs refresh after syllabus flow and production deploy changes
+- Mode: refresh
+- Status: completed
+- Files updated: `.context/base/overview.md`, `.context/base/architecture.md`, `.context/base/requirements.yaml`, `.context/base/tech-stack.yaml`, `.context/base/workflow.yaml`, `.context/base/testing.yaml`, `.context/base/development-plan.yaml`, `.context/base/maintenance.md`, `.context/base/security.yaml`, `AGENTS.md`, `be-fastapi/AGENTS.md`, `fe-reactnative/AGENTS.md`, `PROGRESS.md`
+- Key discoveries:
+  - Root/base steering docs were broadly correct but stale on the user-facing `syllabus/*` shells, explicit revision apply flow, direct-upload create entry, and production Docker topology.
+  - Nested steering docs had drifted much further than root docs: backend notes still framed export around older PDF-first assumptions, while frontend notes still described pre-refactor routes, tools, and testing setup.
+  - The repo now has a production-style deployment baseline (`docker-compose.prod.yml`, frontend nginx image, reverse proxy, `prod-up.sh` / `prod-down.sh`) that future agents should treat as the canonical server rollout starting point.
+  - The verified frontend script surface now includes `npm run e2e`, while the backend local dev command still needs a Git Bash fallback through `uv run python -m uvicorn ...` on Windows shells.

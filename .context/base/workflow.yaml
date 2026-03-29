@@ -2,52 +2,78 @@ install:
   backend:
     working_directory: be-fastapi
     command: uv sync
-    source: inferred from uv-managed backend (`pyproject.toml` + `uv.lock`)
+    source: be-fastapi/pyproject.toml + be-fastapi/uv.lock
   frontend:
     working_directory: fe-reactnative
     command: npm install
-    source: package-lock.json present
+    source: fe-reactnative/package-lock.json
 
 dev:
   backend:
     working_directory: be-fastapi
     command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-    source: docker-compose.yml
+    alternatives:
+      - uv run python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    source: docker-compose.yml and verified local shell workaround
+    notes:
+      - In Git Bash on Windows, `uv run uvicorn ...` can fail with `Failed to canonicalize script path`; `uv run python -m uvicorn ...` is the verified workaround.
   frontend:
     working_directory: fe-reactnative
     command: npm run web
     equivalent:
       - npx expo start --web
-    source: package.json
+    source: fe-reactnative/package.json
   full_stack:
     working_directory: .
     command: docker compose up --build
     source: docker-compose.yml
 
+production:
+  start:
+    working_directory: .
+    command: bash scripts/prod-up.sh
+    source: scripts/prod-up.sh
+  stop:
+    working_directory: .
+    command: bash scripts/prod-down.sh
+    source: scripts/prod-down.sh
+  manual_sequence:
+    - docker compose --env-file .env.prod -f docker-compose.prod.yml build
+    - docker compose --env-file .env.prod -f docker-compose.prod.yml up -d db
+    - docker compose --env-file .env.prod -f docker-compose.prod.yml up -d backend
+    - docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T backend uv run python -m alembic upgrade head
+    - docker compose --env-file .env.prod -f docker-compose.prod.yml up -d frontend proxy
+
 verification:
   backend:
     lint:
       command: uv run ruff check .
-      source: pyproject.toml
+      source: be-fastapi/pyproject.toml
     typecheck:
       command: uv run mypy .
-      source: pyproject.toml
+      source: be-fastapi/pyproject.toml
     test:
       command: uv run pytest
-      source: pyproject.toml
+      source: be-fastapi/pyproject.toml
   frontend:
     available_scripts:
       - npm run web
       - npm run start
       - npm run android
       - npm run ios
+      - npm run e2e
     ad_hoc_commands:
       - npx tsc --noEmit
       - npx expo export --platform web
     runtime_notes:
       - Static web builds can override the API base at runtime via `window.__MYDIGILEARN_API_URL__`, the `apiBaseUrl` query parameter, or `localStorage['mydigilearn.apiBaseUrl']`.
+      - If no override is present on web, the client falls back to `${window.location.protocol}//${window.location.host}/api/v1`, which supports same-origin proxy deployments.
       - When frontend and backend run on different local origins, set backend `CORS_ALLOWED_ORIGINS` to include the active frontend origin.
-    note: No canonical frontend lint, test, typecheck, or build script is defined in package.json.
+    note: No canonical frontend lint, test, typecheck, or build script is defined beyond the existing Expo scripts and `npm run e2e`.
+  production_smoke:
+    - GET http://127.0.0.1:8080/
+    - GET http://127.0.0.1:8080/docs
+    - GET http://127.0.0.1:8080/api/v1/syllabi/
 
 git_process:
   branch_naming:
@@ -55,9 +81,9 @@ git_process:
       - feature/<feature-name>
       - fix/<issue>
       - docs/<topic>
-    source: root AGENTS naming conventions
+    source: repo steering conventions
   pull_requests:
-    policy: No repo-specific PR process was found; keep changes focused and summarize verification clearly.
+    policy: No repo-specific PR workflow was found; keep changes focused and summarize verification clearly.
   commits:
     auto_commit: false
     message_style: conventional commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`)
@@ -72,13 +98,16 @@ agent_artifacts:
     - .plans/
     - .sisyphus/
     - '*.context.md'
+    - .env.prod
+    - fe-reactnative/.tmp/
   committed_steering_files:
     - AGENTS.md
     - PROGRESS.md
     - .context/
 
 known_repo_quirks:
-  - "Root `.gitignore` historically ignored `AGENTS.md` even though it is tracked; this should stay corrected."
+  - Root `.gitignore` historically ignored `AGENTS.md` even though it is tracked; keep that contradiction corrected.
   - Root `server.py` is ignored on purpose because it contains deployment credentials and should not be treated as normal app code.
-  - Frontend API base URL can be overridden at runtime via window, query string, localStorage, or `EXPO_PUBLIC_API_URL`.
-  - "`alembic upgrade head` currently resolves through merge revision `8f1629c83c67`, which reconciles the `design_sessions` and embedding-dimension migration branches."
+  - The user-facing create flow is now `Syllabus/Create`, but the actual implementation still re-exports the underlying `design-session` screens for compatibility.
+  - Runtime DOCX export uses `be-fastapi/app/features/export/templates/syllabus_template.docx`; do not treat historical `$placeholder` artifacts as the active template contract.
+  - "`alembic upgrade head` currently resolves through merge revision `8f1629c83c67`, then applies `c9f3f2788f8a_add_finalized_syllabus_snapshot_fields`."

@@ -1,34 +1,44 @@
 mode: refresh
 
 phases:
-  - name: backend-contract
+  - name: syllabus-flow-reframe
     status: completed
-    summary: Move syllabus creation from a legacy one-shot flow to stateful `design_sessions` endpoints.
+    summary: Move the user-facing product shell to `Syllabus/Create`, `Syllabus/Generated`, revision, and export while preserving compatibility aliases to `design-session` screens.
     evidence:
-      - .plans/backend.md
-      - be-fastapi/app/features/design_sessions
-  - name: frontend-wizard
+      - fe-reactnative/app/syllabus/create/index.tsx
+      - fe-reactnative/app/syllabus/generated.tsx
+      - fe-reactnative/app/syllabus/[id]/revision.tsx
+      - fe-reactnative/app/syllabus/[id]/export.tsx
+  - name: backend-hardening
     status: completed
-    summary: Render the backend-owned wizard flow in Expo Router and reduce local-only state.
+    summary: Harden ingest, legacy syllabus generation, revision persistence, and export snapshot behavior for real empty-environment audits.
     evidence:
-      - .plans/frontend.md
-      - fe-reactnative/app/design-session/[sessionId].tsx
-      - fe-reactnative/src/services/designSessions.ts
-  - name: integration-and-hardening
+      - be-fastapi/app/features/documents/service.py
+      - be-fastapi/app/features/syllabus/generator.py
+      - be-fastapi/app/features/syllabus/service.py
+      - be-fastapi/app/features/export/service.py
+  - name: docx-export-polish
     status: completed
-    summary: Keep legacy compatibility while validating the wizard, DOCX export, and downstream syllabus flows end to end.
+    summary: Normalize the runtime DOCX template contract and clean exported text/layout issues.
     evidence:
-      - .plans/integration.md
-      - be-fastapi/app/features/syllabus/router.py
-      - fe-reactnative/src/services/api.ts
-      - fe-reactnative/src/hooks/useSyllabus.ts
+      - be-fastapi/app/features/export/templates/syllabus_template.docx
+      - be-fastapi/tests/features/test_export_service.py
+  - name: production-docker-stack
+    status: completed
+    summary: Add a production-style Docker topology with nginx proxy, static frontend container, backend container, database, and migration/startup scripts.
+    evidence:
+      - docker-compose.prod.yml
+      - scripts/prod-up.sh
+      - fe-reactnative/Dockerfile
+      - proxy/nginx.conf
 
 major_dependencies:
   - Azure OpenAI availability and correct deployment names
   - PostgreSQL with pgvector for backend persistence
-  - Consistent API contract between `design_sessions` endpoints and Expo screens
+  - Consistent contract between finalized syllabus snapshots, revision apply, and DOCX template context
+  - Correct production env vars in `.env.prod` / server-side secret management
 
 known_unknowns:
   - No repo-level CI workflow is present.
-  - Auth and deployment policy are not fully documented in the repo.
-  - No canonical frontend verification scripts are present yet, even though `npx tsc --noEmit` and `npx expo export --platform web` are currently useful ad hoc checks.
+  - Auth and deployment policy beyond Docker topology are not fully documented in the repo.
+  - HTTPS/domain rollout, backup policy, and operational monitoring are still outside the repo-evident baseline.
