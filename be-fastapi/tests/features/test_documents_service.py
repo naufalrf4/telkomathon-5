@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import pytest
 
+from app.exceptions import ValidationException
 from app.features.documents.service import DocumentService
 
 
@@ -111,3 +112,14 @@ async def test_upload_document_falls_back_when_embeddings_fail(
     assert chunk_metadata["embedding_fallback"] is True
     assert len(chunk_embedding) == 3072
     assert set(chunk_embedding) == {0.0}
+
+
+@pytest.mark.asyncio
+async def test_upload_document_rejects_file_over_50mb() -> None:
+    service = DocumentService(cast(Any, FakeDocumentSession()))
+
+    with pytest.raises(ValidationException, match="50MB"):
+        await service.upload_document(
+            cast(Any, FakeUploadFile("oversize.docx", b"x" * (50 * 1024 * 1024 + 1))),
+            doc_type="company-profile",
+        )

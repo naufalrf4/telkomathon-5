@@ -20,6 +20,7 @@ from app.utils.file_parser import parse_file
 
 _ALLOWED_FORMATS = {"pdf", "docx", "pptx"}
 _ZERO_EMBEDDING = [0.0] * settings.EMBEDDING_DIMENSIONS
+_MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 
 class DocumentService:
@@ -38,6 +39,8 @@ class DocumentService:
         file_id = uuid.uuid4()
         file_path = upload_dir / f"{file_id}_{filename}"
         raw = await file.read()
+        if len(raw) > _MAX_UPLOAD_BYTES:
+            raise ValidationException("File size exceeds 50MB limit")
         _ = await asyncio.to_thread(file_path.write_bytes, raw)
 
         doc = Document(

@@ -17,8 +17,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="MyDigiLearn API",
-        description="AI-Powered Curriculum Design & Personalized Micro-Learning",
+        title="PRIMA API",
+        description="Personalized Responsive Intelligent Micro-Learning Assistant",
         version="1.0.0",
         lifespan=lifespan,
     )

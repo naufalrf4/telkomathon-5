@@ -34,18 +34,30 @@ async def test_generate_docx_returns_docx_bytes() -> None:
         course_category="Technical Upskilling",
         client_company_name="PT Contoh Industri",
         course_title="AI Space Data Analytics Bootcamp",
-        company_profile_summary="Perusahaan fokus pada transformasi data lintas fungsi.",
+        company_profile_summary="perusahaan fokus pada transformasi data lintas fungsi. fokus utama tahun berjalan adalah peningkatan kapabilitas talenta.",
         commercial_overview="Program diarahkan untuk menutup gap analitik supervisor.",
         status="finalized",
         tlo="Peserta mampu menerapkan analitik data.",
         performance_result="Peserta mampu membaca dashboard dan menyusun insight.",
         condition_result="Menggunakan data operasional dan studi kasus unit kerja.",
         standard_result="Insight dapat dipresentasikan secara akurat dan dapat ditindaklanjuti.",
-        elos=[{"elo": "Menganalisis data", "pce": ["A", "B", "C"]}],
+        elos=[{"elo": "Menjelaskan indikator utama pada dashboard operasional."}],
         journey={
-            "pre_learning": ["Belajar dasar"],
-            "classroom": ["Latihan kasus"],
-            "after_learning": ["Rencana aksi"],
+            "pre_learning": {
+                "duration": "30 menit",
+                "description": "Persiapan konsep dasar",
+                "content": ["Belajar dasar"],
+            },
+            "classroom": {
+                "duration": "1 hari",
+                "description": "Workshop studi kasus",
+                "content": ["Latihan kasus"],
+            },
+            "after_learning": {
+                "duration": "1 minggu",
+                "description": "Implementasi rencana aksi",
+                "content": ["Rencana aksi"],
+            },
         },
         revision_history=[{"summary": "Initial finalize"}],
         created_at=datetime.now(UTC),
@@ -65,6 +77,11 @@ async def test_generate_docx_returns_docx_bytes() -> None:
     assert "Technical Upskilling" in xml
     assert "AI Space Data Analytics Bootcamp" in xml
     assert "Peserta mampu menerapkan analitik data." in xml
+    assert "Intermediate" in xml
+    assert "Perusahaan fokus pada transformasi data lintas fungsi." in xml
+    assert "Fokus utama tahun berjalan adalah peningkatan kapabilitas talenta." in xml
+    assert "Duration: 1 hari" in xml
+    assert "Description: Workshop studi kasus" in xml
     assert "Latihan kasus" in xml
     assert "Rencana aksi" in xml
     assert "{{" not in xml

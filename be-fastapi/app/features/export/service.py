@@ -3,6 +3,7 @@ import io
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from re import split as re_split
 from typing import Any, cast
 
 from docxtpl import DocxTemplate, RichText
@@ -59,25 +60,24 @@ class ExportService:
 
     def _render_docx(self, syllabus: GeneratedSyllabus) -> bytes:
         template = DocxTemplate(str(DOCX_TEMPLATE_PATH))
-        context = self._build_docx_context(syllabus)
-        template.render(context, autoescape=True)
+        template.render(self._build_docx_context(syllabus), autoescape=True)
         buffer = io.BytesIO()
         template.save(buffer)
         return buffer.getvalue()
 
     def _build_docx_context(self, syllabus: GeneratedSyllabus) -> dict[str, object]:
-        journey = syllabus.journey or {}
         date_stamp = datetime.now(UTC).strftime("%d %b %Y")
-
         return {
             "course_category": self._plain_text(
-                syllabus.course_category, fallback="Level " + str(syllabus.target_level)
+                syllabus.course_category,
+                fallback=f"Level {syllabus.target_level}",
             ),
+            "course_expertise_level": self._course_expertise_level(syllabus.target_level),
             "date_stamp": date_stamp,
             "client_company_name": self._plain_text(syllabus.client_company_name),
             "course_title": self._plain_text(syllabus.course_title, fallback=syllabus.topic),
             "company_profile_summary": self._rich_text(
-                syllabus.company_profile_summary,
+                self._format_company_profile_summary(syllabus.company_profile_summary),
                 fallback="Profil perusahaan belum disimpan pada syllabus final.",
             ),
             "commercial_overview": self._rich_text(
@@ -92,7 +92,7 @@ class ExportService:
             ),
             "condition_result": self._rich_text(
                 syllabus.condition_result,
-                fallback=self._derived_condition_fallback(syllabus),
+                fallback="Condition belum tersedia.",
             ),
             "standard_result": self._rich_text(
                 syllabus.standard_result,
@@ -100,21 +100,17 @@ class ExportService:
             ),
             "elo_results": self._rich_text(self._format_elos(syllabus.elos or [])),
             "pre_learning_results": self._rich_text(
-                self._format_list(
-                    journey.get("pre_learning", []),
-                    empty_message="Belum ada aktivitas pre-learning.",
-                ),
+                self._format_stage(
+                    syllabus.journey, "pre_learning", "Belum ada aktivitas pre-learning."
+                )
             ),
             "classroom_results": self._rich_text(
-                self._format_list(
-                    journey.get("classroom", []), empty_message="Belum ada aktivitas classroom."
-                ),
+                self._format_stage(syllabus.journey, "classroom", "Belum ada aktivitas classroom.")
             ),
             "after_learning_results": self._rich_text(
-                self._format_list(
-                    journey.get("after_learning", []),
-                    empty_message="Belum ada aktivitas after-learning.",
-                ),
+                self._format_stage(
+                    syllabus.journey, "after_learning", "Belum ada aktivitas after-learning."
+                )
             ),
         }
 
@@ -123,63 +119,109 @@ class ExportService:
         return normalized or fallback
 
     def _rich_text(self, value: str | None, *, fallback: str = "-") -> RichText:
-        text = self._plain_text(value, fallback=fallback)
         rich_text = RichText()
-        rich_text.add(text)
+        rich_text.add(self._plain_text(value, fallback=fallback))
         return rich_text
 
     def _normalize_export_text(self, value: str) -> str:
         collapsed = " ".join(value.replace("\r", " ").split())
         return collapsed.lstrip("$ ").strip()
 
+    def _format_company_profile_summary(self, value: str | None) -> str | None:
+        normalized = self._normalize_export_text(value or "")
+        if not normalized:
+            return None
+
+        sentences = [
+            segment.strip() for segment in re_split(r"(?<=[.!?])\s+", normalized) if segment.strip()
+        ]
+        if not sentences:
+            return normalized[:1].upper() + normalized[1:] if normalized else None
+
+        formatted: list[str] = []
+        for sentence in sentences:
+            cleaned = sentence.strip()
+            if not cleaned:
+                continue
+            punctuation = cleaned[-1] if cleaned[-1] in ".!?" else "."
+            body = (
+                cleaned[:-1]
+                if punctuation != "." or cleaned.endswith((".", "!", "?"))
+                else cleaned.rstrip(".")
+            )
+            body = body.strip().rstrip(".!?")
+            if not body:
+                continue
+            formatted.append(body[:1].upper() + body[1:] + punctuation)
+        return " ".join(formatted) if formatted else None
+
     def _format_elos(self, elos: list[dict[str, object]]) -> str:
         if not elos:
             return "Belum ada ELO yang tersimpan."
         lines: list[str] = []
         for index, elo in enumerate(elos, start=1):
-            elo_text = str(elo.get("elo", "")).strip() or f"ELO {index}"
-            lines.append(f"{index}. {elo_text}")
-            pce = elo.get("pce", [])
-            if isinstance(pce, list):
-                for point in pce:
-                    point_text = str(point).strip()
-                    if point_text:
-                        lines.append(f"   - {point_text}")
-        return "\n".join(lines)
+            elo_text = self._normalize_export_text(str(elo.get("elo", "")))
+            if elo_text:
+                lines.append(f"{index}. {elo_text}")
+        return "\n".join(lines) or "Belum ada ELO yang tersimpan."
 
-    def _format_list(self, values: object, *, empty_message: str) -> str:
-        if not isinstance(values, list) or not values:
+    def _format_stage(
+        self,
+        journey: object,
+        stage_name: str,
+        empty_message: str,
+    ) -> str:
+        if not isinstance(journey, dict):
             return empty_message
-        lines = [f"- {str(value).strip()}" for value in values if str(value).strip()]
-        return "\n".join(lines) or empty_message
+        stage = journey.get(stage_name)
+        if isinstance(stage, list):
+            content_lines = [
+                f"- {self._normalize_export_text(str(item))}"
+                for item in stage
+                if isinstance(item, str) and self._normalize_export_text(str(item))
+            ]
+            return "\n".join(["Content:", *content_lines]) if content_lines else empty_message
+        if not isinstance(stage, dict):
+            return empty_message
 
-    def _derived_condition_fallback(self, syllabus: GeneratedSyllabus) -> str:
-        first_point = self._first_pce_point(syllabus)
-        if first_point is None:
-            return "Condition belum tersedia."
-        return first_point
+        duration = self._normalize_export_text(str(stage.get("duration", "")))
+        description = self._normalize_export_text(str(stage.get("description", "")))
+        content = stage.get("content")
+        content_lines = (
+            [
+                f"- {self._normalize_export_text(str(item))}"
+                for item in content
+                if isinstance(item, str) and self._normalize_export_text(str(item))
+            ]
+            if isinstance(content, list)
+            else []
+        )
+
+        parts: list[str] = []
+        if duration:
+            parts.append(f"Duration: {duration}")
+        if description:
+            parts.append(f"Description: {description}")
+        if content_lines:
+            parts.append("Content:")
+            parts.extend(content_lines)
+        return "\n".join(parts) if parts else empty_message
 
     def _derived_standard_fallback(self, syllabus: GeneratedSyllabus) -> str:
-        unique_points: list[str] = []
-        for elo in syllabus.elos or []:
-            pce = elo.get("pce", []) if isinstance(elo, dict) else []
-            if not isinstance(pce, list):
-                continue
-            for value in pce[1:]:
-                point_text = str(value).strip()
-                if point_text and point_text not in unique_points:
-                    unique_points.append(point_text)
-        if not unique_points:
+        elo_count = len([item for item in syllabus.elos or [] if isinstance(item, dict)])
+        if elo_count <= 0:
             return "Standard belum tersedia."
-        return "\n".join(f"- {value}" for value in unique_points)
+        return (
+            f"Keberhasilan peserta diukur melalui ketercapaian {elo_count} enabling learning outcome, "
+            "akurasi pemahaman konsep, dan kejelasan penjelasan terhadap konteks kerja."
+        )
 
-    def _first_pce_point(self, syllabus: GeneratedSyllabus) -> str | None:
-        for elo in syllabus.elos or []:
-            pce = elo.get("pce", []) if isinstance(elo, dict) else []
-            if not isinstance(pce, list):
-                continue
-            for value in pce:
-                point_text = str(value).strip()
-                if point_text:
-                    return point_text
-        return None
+    def _course_expertise_level(self, target_level: int) -> str:
+        mapping = {
+            1: "Foundational",
+            2: "Elementary",
+            3: "Intermediate",
+            4: "Advanced",
+            5: "Expert",
+        }
+        return mapping.get(target_level, f"Level {target_level}")
