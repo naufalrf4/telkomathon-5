@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     SIMILARITY_THRESHOLD: float = 0.75
     MAX_CHAT_HISTORY: int = 10
     UPLOAD_DIR: str = "uploads"
+    MAX_UPLOAD_MB: int = 100
     CORS_ALLOWED_ORIGINS: str = (
         "http://localhost:3000,"
         "http://127.0.0.1:3000,"

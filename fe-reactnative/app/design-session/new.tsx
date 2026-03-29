@@ -14,7 +14,8 @@ import type { Document as SourceDocument } from '../../src/types/api';
 
 const ACCEPTED_FILE_TYPES =
   '.pdf,.docx,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation';
-const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+const MAX_UPLOAD_MB = Number(process.env.EXPO_PUBLIC_MAX_UPLOAD_MB ?? '100');
+const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
 
 function docTypeFromFilename(filename: string): string {
   const extension = filename.split('.').pop()?.toLowerCase() ?? '';
@@ -83,7 +84,7 @@ export default function NewDesignSessionScreen() {
 
       const file = result.assets[0];
       if ((file.size ?? 0) > MAX_UPLOAD_BYTES) {
-        setUploadError('Ukuran file terlalu besar. Maksimum 50MB.');
+        setUploadError(`Ukuran file terlalu besar. Maksimum ${MAX_UPLOAD_MB}MB.`);
         return;
       }
       const formData = new FormData();
@@ -113,7 +114,7 @@ export default function NewDesignSessionScreen() {
     try {
       const oversized = files.find((file) => file.size > MAX_UPLOAD_BYTES);
       if (oversized) {
-        setUploadError('Ukuran file terlalu besar. Maksimum 50MB.');
+        setUploadError(`Ukuran file terlalu besar. Maksimum ${MAX_UPLOAD_MB}MB.`);
         return;
       }
       for (const file of files) {
@@ -225,7 +226,7 @@ export default function NewDesignSessionScreen() {
                   <Ionicons name="cloud-upload-outline" size={34} color={colors.primary} />
                 </div>
                 <Text className="text-xl font-bold text-gray-900">Drag & drop file</Text>
-                <Text className="text-center text-gray-500">PDF, DOCX, atau PPTX</Text>
+                <Text className="text-center text-gray-500">PDF, DOCX, atau PPTX • maks {MAX_UPLOAD_MB}MB</Text>
               </div>
             </div>
           </>
@@ -236,7 +237,7 @@ export default function NewDesignSessionScreen() {
                  <Ionicons name="cloud-upload-outline" size={32} color={colors.primary} />
                </View>
                <Text className="text-xl font-bold text-gray-900">Unggah file</Text>
-               <Text className="text-center text-gray-500">PDF, DOCX, atau PPTX</Text>
+               <Text className="text-center text-gray-500">PDF, DOCX, atau PPTX • maks {MAX_UPLOAD_MB}MB</Text>
                <Button title="Pilih Dokumen" onPress={() => void uploadNativeDocument()} isLoading={isUploading} />
              </View>
            </Card>

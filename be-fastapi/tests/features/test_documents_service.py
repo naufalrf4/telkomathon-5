@@ -115,11 +115,11 @@ async def test_upload_document_falls_back_when_embeddings_fail(
 
 
 @pytest.mark.asyncio
-async def test_upload_document_rejects_file_over_50mb() -> None:
+async def test_upload_document_rejects_file_over_limit() -> None:
     service = DocumentService(cast(Any, FakeDocumentSession()))
 
-    with pytest.raises(ValidationException, match="50MB"):
+    with pytest.raises(ValidationException, match="100MB"):
         await service.upload_document(
-            cast(Any, FakeUploadFile("oversize.docx", b"x" * (50 * 1024 * 1024 + 1))),
+            cast(Any, FakeUploadFile("oversize.docx", b"x" * (100 * 1024 * 1024 + 1))),
             doc_type="company-profile",
         )

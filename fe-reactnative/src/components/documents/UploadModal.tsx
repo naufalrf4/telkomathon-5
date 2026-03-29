@@ -1,9 +1,11 @@
+import { useRef, type ChangeEvent } from 'react';
 import { Alert, Modal, View, Text, Pressable, ActivityIndicator, Platform } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 
-const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+const MAX_UPLOAD_MB = Number(process.env.EXPO_PUBLIC_MAX_UPLOAD_MB ?? '100');
+const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
 
 interface UploadModalProps {
   visible: boolean;
@@ -18,7 +20,9 @@ function friendlyError(msg: string): string {
   if (msg.includes('503') || msg.includes('Service Unavailable'))
     return 'Server sedang tidak tersedia. Coba beberapa saat lagi.';
   if (msg.includes('413') || msg.includes('too large'))
-    return 'Ukuran file terlalu besar. Maksimum 50MB.';
+    return `Ukuran file terlalu besar. Maksimum ${MAX_UPLOAD_MB}MB.`;
+  if (msg.includes('422') && msg.includes('File size exceeds'))
+    return `Ukuran file terlalu besar. Maksimum ${MAX_UPLOAD_MB}MB.`;
   if (msg.includes('415') || msg.includes('unsupported'))
     return 'Format file tidak didukung. Gunakan PDF, DOCX, atau PPTX.';
   if (msg.includes('network') || msg.includes('fetch'))
@@ -34,7 +38,40 @@ export function UploadModal({
   uploadError,
   uploadSuccess,
 }: UploadModalProps) {
+  const webInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleWebFiles = (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) {
+      return;
+    }
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      Alert.alert('Ukuran file terlalu besar', `Maksimum ukuran file adalah ${MAX_UPLOAD_MB}MB.`);
+      return;
+    }
+
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+    const docTypeMap: Record<string, string> = { pdf: 'pdf', docx: 'docx', pptx: 'pptx' };
+    const docType = docTypeMap[ext] ?? 'pdf';
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('doc_type', docType);
+    onUpload(formData);
+  };
+
+  const handleWebInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    handleWebFiles(event.target.files);
+    event.target.value = '';
+  };
+
   const handlePickDocument = async () => {
+    if (Platform.OS === 'web') {
+      webInputRef.current?.click();
+      return;
+    }
+
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: [
@@ -49,7 +86,7 @@ export function UploadModal({
 
       const file = result.assets[0];
       if ((file.size ?? 0) > MAX_UPLOAD_BYTES) {
-        Alert.alert('Ukuran file terlalu besar', 'Maksimum ukuran file adalah 50MB.');
+        Alert.alert('Ukuran file terlalu besar', `Maksimum ukuran file adalah ${MAX_UPLOAD_MB}MB.`);
         return;
       }
       const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
@@ -58,16 +95,11 @@ export function UploadModal({
 
       const formData = new FormData();
 
-      if (Platform.OS === 'web') {
-        const webFile = (file as typeof file & { file?: File }).file;
-        if (webFile) formData.append('file', webFile);
-      } else {
-        formData.append('file', {
-          uri: file.uri,
-          name: file.name,
-          type: file.mimeType ?? 'application/octet-stream',
-        } as unknown as Blob);
-      }
+      formData.append('file', {
+        uri: file.uri,
+        name: file.name,
+        type: file.mimeType ?? 'application/octet-stream',
+      } as unknown as Blob);
 
       formData.append('doc_type', docType);
       onUpload(formData);
@@ -80,6 +112,15 @@ export function UploadModal({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View className="flex-1 bg-black/50 items-center justify-center p-4">
         <View className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl">
+          {Platform.OS === 'web' ? (
+            <input
+              ref={webInputRef}
+              type="file"
+              accept=".pdf,.docx,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+              style={{ display: 'none' }}
+              onChange={handleWebInputChange}
+            />
+          ) : null}
           {isUploading ? (
             <View className="items-center py-8">
               <ActivityIndicator size="large" color={colors.primary} />
@@ -145,10 +186,10 @@ export function UploadModal({
                 </Pressable>
               </View>
               
-              <Text className="text-gray-500 mb-8 leading-relaxed">
-                Pilih file materi pembelajaran Anda (PDF, DOCX, atau PPTX) untuk dianalisis oleh AI.
-                Maksimum ukuran file 50MB.
-              </Text>
+                <Text className="text-gray-500 mb-8 leading-relaxed">
+                  Pilih file materi pembelajaran Anda (PDF, DOCX, atau PPTX) untuk dianalisis oleh AI.
+                 Maksimum ukuran file {MAX_UPLOAD_MB}MB.
+                </Text>
 
               <View className="gap-3">
                 <Pressable
