@@ -80,10 +80,14 @@ async def test_generate_docx_returns_docx_bytes() -> None:
     assert "Intermediate" in xml
     assert "Perusahaan fokus pada transformasi data lintas fungsi." in xml
     assert "Fokus utama tahun berjalan adalah peningkatan kapabilitas talenta." in xml
-    assert "Duration: 1 hari" in xml
-    assert "Description: Workshop studi kasus" in xml
+    assert "Duration" in xml
+    assert "1 hari" in xml
+    assert "Method" in xml
+    assert "Workshop studi kasus" in xml
+    assert "Evaluation" in xml
     assert "Latihan kasus" in xml
-    assert "Rencana aksi" in xml
+    assert "1 minggu" in xml
+    assert "Implementasi rencana aksi" in xml
     assert "{{" not in xml
     assert "$course_title" not in xml
     assert "$Technical Upskilling" not in xml
