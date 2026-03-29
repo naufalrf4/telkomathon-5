@@ -100,6 +100,7 @@ export default function DesignSessionScreen() {
   const showSelectElo = activeStep === 'elo_options_ready';
   const showFinalize = activeStep === 'elo_selected';
   const showCompleted = activeStep === 'finalized';
+  const showPerformancePreview = !!session?.selected_performance && (showGenerateElo || showSelectElo || showFinalize || showCompleted);
 
   const runAction = async (action: () => Promise<unknown>, onSuccess?: () => void) => {
     setErrorMessage(null);
@@ -239,6 +240,14 @@ export default function DesignSessionScreen() {
               {session.source_summary ? (
                 <View className="gap-3">
                   <Text className="text-gray-700 leading-6">{session.source_summary.summary}</Text>
+                  {session.source_summary.company_profile_focus.length > 0 ? (
+                    <View className="gap-2 rounded-xl border border-gray-100 bg-gray-50 p-3">
+                      <Text className="text-xs font-semibold uppercase tracking-wide text-gray-500">Company profile focus</Text>
+                      {session.source_summary.company_profile_focus.map((point) => (
+                        <Text key={point} className="text-sm text-gray-700">• {point}</Text>
+                      ))}
+                    </View>
+                  ) : null}
                   {session.source_summary.key_points.map((point) => (
                     <View key={point} className="flex-row items-start gap-2">
                       <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
@@ -274,10 +283,13 @@ export default function DesignSessionScreen() {
             ) : null}
 
             {showCourseContext ? (
-               <Card title="2. Tentukan Konteks Kursus" subtitle="Lengkapi arah kursus dan konteks ekspor agar backend bisa membuat opsi TLO sekaligus menyiapkan snapshot final.">
-                 <View className="gap-4">
-                  <View className="gap-2">
-                    <Text className="font-semibold text-gray-900">Topik Kursus</Text>
+                <Card title="2. Tentukan Konteks Kursus" subtitle="Lengkapi arah kursus dan konteks ekspor agar backend bisa membuat opsi TLO sekaligus menyiapkan snapshot final.">
+                  <View className="gap-4">
+                  <View className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                    <Text className="text-sm text-gray-600">Kolom bertanda <Text className="font-semibold text-primary">*</Text> wajib diisi. Kolom lain bersifat opsional.</Text>
+                  </View>
+                   <View className="gap-2">
+                    <Text className="font-semibold text-gray-900">Topik Kursus <Text className="text-primary">*</Text></Text>
                     <TextInput
                       value={topic}
                       onChangeText={setTopic}
@@ -287,7 +299,7 @@ export default function DesignSessionScreen() {
                   </View>
 
                   <View className="gap-2">
-                    <Text className="font-semibold text-gray-900">Target Level</Text>
+                    <Text className="font-semibold text-gray-900">Target Level <Text className="text-primary">*</Text></Text>
                     <View className="flex-row flex-wrap gap-2">
                       {LEVEL_OPTIONS.map((level) => (
                         <Pressable
@@ -302,7 +314,7 @@ export default function DesignSessionScreen() {
                   </View>
 
                   <View className="gap-2">
-                    <Text className="font-semibold text-gray-900">Kategori Kursus</Text>
+                    <Text className="font-semibold text-gray-900">Kategori Kursus <Text className="text-gray-400">(Opsional)</Text></Text>
                     <TextInput
                       value={courseCategory}
                       onChangeText={setCourseCategory}
@@ -312,7 +324,7 @@ export default function DesignSessionScreen() {
                   </View>
 
                   <View className="gap-2">
-                    <Text className="font-semibold text-gray-900">Nama Klien / Perusahaan</Text>
+                    <Text className="font-semibold text-gray-900">Nama Klien / Perusahaan <Text className="text-gray-400">(Opsional)</Text></Text>
                     <TextInput
                       value={clientCompanyName}
                       onChangeText={setClientCompanyName}
@@ -322,7 +334,7 @@ export default function DesignSessionScreen() {
                   </View>
 
                   <View className="gap-2">
-                    <Text className="font-semibold text-gray-900">Judul Kursus untuk Export</Text>
+                    <Text className="font-semibold text-gray-900">Judul Kursus untuk Export <Text className="text-gray-400">(Opsional)</Text></Text>
                     <TextInput
                       value={courseTitle}
                       onChangeText={setCourseTitle}
@@ -332,7 +344,7 @@ export default function DesignSessionScreen() {
                   </View>
 
                   <View className="gap-2">
-                    <Text className="font-semibold text-gray-900">Konteks Tambahan</Text>
+                    <Text className="font-semibold text-gray-900">Konteks Tambahan <Text className="text-gray-400">(Opsional)</Text></Text>
                     <TextInput
                       value={additionalContext}
                       onChangeText={setAdditionalContext}
@@ -345,7 +357,7 @@ export default function DesignSessionScreen() {
                   </View>
 
                   <View className="gap-2">
-                    <Text className="font-semibold text-gray-900">Ringkasan Komersial / Business Need</Text>
+                    <Text className="font-semibold text-gray-900">Ringkasan Komersial / Business Need <Text className="text-gray-400">(Opsional)</Text></Text>
                     <TextInput
                       value={commercialOverview}
                       onChangeText={setCommercialOverview}
@@ -374,11 +386,13 @@ export default function DesignSessionScreen() {
             {showSelectTlo ? (
               <OptionSelectionCard
                 title="4. Pilih TLO"
-                subtitle="Pilih satu opsi TLO sebagai arah utama silabus."
+                subtitle="Pilih satu opsi TLO sebagai arah utama silabus. Jika belum pas, generate ulang sampai sesuai."
                 options={session.tlo_options}
                 actionLabel="Gunakan TLO Ini"
                 isWorking={isWorking}
                 onSelect={(optionId) => void runAction(() => selectTlo(optionId))}
+                secondaryActionLabel="Generate Ulang TLO"
+                onSecondaryAction={() => void runAction(() => generateTloOptions())}
               />
             ) : null}
 
@@ -389,14 +403,26 @@ export default function DesignSessionScreen() {
               </Card>
             ) : null}
 
+            {showPerformancePreview ? (
+              <Card title="PCS Preview" subtitle="Preview backend untuk Performance, Condition, dan Standard sebelum syllabus difinalkan.">
+                <View className="gap-4">
+                  <PreviewField label="Performance" value={session.selected_performance?.text ?? 'Belum dipilih'} />
+                  <PreviewField label="Condition" value={session.preview_condition_result ?? 'Akan muncul setelah performa dipilih.'} />
+                  <PreviewField label="Standard" value={session.preview_standard_result ?? 'Akan disesuaikan setelah ELO dipilih.'} />
+                </View>
+              </Card>
+            ) : null}
+
             {showSelectPerformance ? (
               <OptionSelectionCard
                 title="6. Pilih Performa"
-                subtitle="Pilih satu performa terbaik sebagai dasar penurunan ELO."
+                subtitle="Pilih satu performa terbaik sebagai dasar penurunan ELO. Jika belum pas, generate ulang sampai sesuai."
                 options={session.performance_options}
                 actionLabel="Gunakan Performa Ini"
                 isWorking={isWorking}
                 onSelect={(optionId) => void runAction(() => selectPerformance(optionId))}
+                secondaryActionLabel="Generate Ulang Performa"
+                onSecondaryAction={() => void runAction(() => generatePerformanceOptions())}
               />
             ) : null}
 
@@ -410,8 +436,11 @@ export default function DesignSessionScreen() {
             ) : null}
 
             {showSelectElo ? (
-              <Card title="8. Pilih ELO" subtitle="Anda dapat memilih lebih dari satu ELO untuk dibawa ke silabus final.">
+              <Card title="8. Pilih ELO" subtitle="Anda dapat memilih lebih dari satu ELO untuk dibawa ke silabus final. Jika opsi belum cocok, generate ulang untuk hasil yang lebih tepat.">
                 <View className="gap-4">
+                  <View className="flex-row justify-end">
+                    <Button title="Generate Ulang ELO" variant="outline" onPress={() => void runAction(() => generateEloOptions())} isLoading={isWorking} />
+                  </View>
                   {session.elo_options.map((option) => {
                     const isSelected = selectedEloIds.includes(option.id);
 
@@ -425,13 +454,6 @@ export default function DesignSessionScreen() {
                           <View className="flex-1 gap-2">
                             <Text className="text-lg font-semibold text-gray-900">{option.elo}</Text>
                             <Text className="text-gray-600">{option.rationale}</Text>
-                            <View className="flex-row flex-wrap gap-2">
-                              {option.pce.map((item) => (
-                                <View key={item} className="bg-white rounded-full px-3 py-1 border border-red-100">
-                                  <Text className="text-xs text-primary font-medium">{item}</Text>
-                                </View>
-                              ))}
-                            </View>
                           </View>
                           <Ionicons name={isSelected ? 'checkbox' : 'square-outline'} size={24} color={isSelected ? colors.primary : colors.textSecondary} />
                         </View>
@@ -490,12 +512,19 @@ interface OptionSelectionCardProps {
   actionLabel: string;
   isWorking: boolean;
   onSelect: (optionId: string) => void;
+  secondaryActionLabel?: string;
+  onSecondaryAction?: () => void;
 }
 
-function OptionSelectionCard({ title, subtitle, options, actionLabel, isWorking, onSelect }: OptionSelectionCardProps) {
+function OptionSelectionCard({ title, subtitle, options, actionLabel, isWorking, onSelect, secondaryActionLabel, onSecondaryAction }: OptionSelectionCardProps) {
   return (
     <Card title={title} subtitle={subtitle}>
       <View className="gap-4">
+        {secondaryActionLabel && onSecondaryAction ? (
+          <View className="flex-row justify-end">
+            <Button title={secondaryActionLabel} variant="outline" onPress={onSecondaryAction} isLoading={isWorking} />
+          </View>
+        ) : null}
         {options.map((option) => (
           <Card key={option.id} className="border border-gray-200 bg-gray-50">
             <View className="gap-3">
@@ -514,5 +543,14 @@ function OptionSelectionCard({ title, subtitle, options, actionLabel, isWorking,
         ))}
       </View>
     </Card>
+  );
+}
+
+function PreviewField({ label, value }: { label: string; value: string }) {
+  return (
+    <View className="gap-1 rounded-xl border border-gray-100 bg-gray-50 p-3">
+      <Text className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</Text>
+      <Text className="text-sm leading-6 text-gray-800">{value}</Text>
+    </View>
   );
 }

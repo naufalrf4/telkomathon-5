@@ -10,44 +10,51 @@ export interface Document {
 
 export interface ELO {
   elo: string;
-  pce: string[];
+}
+
+export interface LearningJourneyStage {
+  duration: string;
+  description: string;
+  content: string[];
 }
 
 export interface LearningJourney {
-  pre_learning: string[];
-  classroom: string[];
-  after_learning: string[];
+  pre_learning: LearningJourneyStage;
+  classroom: LearningJourneyStage;
+  after_learning: LearningJourneyStage;
 }
 
 export interface RevisionHistoryEntry {
-  timestamp: string;
-  summary?: string | null;
-  reason?: string | null;
+  tlo: string;
+  performance_result?: string | null;
+  condition_result?: string | null;
+  standard_result?: string | null;
+  elos: ELO[];
+  journey: LearningJourney;
+  revised_at: string;
+  summary: string;
+  reason: string;
   source_message_id?: string | null;
   applied_fields: string[];
-  previous: {
-    tlo: string;
-    elos: ELO[];
-    journey: LearningJourney | null;
-  };
 }
 
 export interface Syllabus {
   id: string;
   topic: string;
   target_level: number;
+  course_expertise_level: string;
   tlo: string;
   elos: ELO[];
   journey?: LearningJourney | null;
-   course_category?: string | null;
-   client_company_name?: string | null;
-   course_title?: string | null;
-   company_profile_summary?: string | null;
-   commercial_overview?: string | null;
-   performance_result?: string | null;
-   condition_result?: string | null;
-   standard_result?: string | null;
-   revision_history: RevisionHistoryEntry[];
+  course_category?: string | null;
+  client_company_name?: string | null;
+  course_title?: string | null;
+  company_profile_summary?: string | null;
+  commercial_overview?: string | null;
+  performance_result?: string | null;
+  condition_result?: string | null;
+  standard_result?: string | null;
+  revision_history: RevisionHistoryEntry[];
   status: string;
   created_at: string;
   updated_at?: string;
@@ -56,6 +63,9 @@ export interface Syllabus {
 export interface ApplySyllabusRevisionPayload {
   summary?: string;
   tlo?: string;
+  performance_result?: string;
+  condition_result?: string;
+  standard_result?: string;
   elos?: ELO[];
   journey?: LearningJourney;
   reason?: string;

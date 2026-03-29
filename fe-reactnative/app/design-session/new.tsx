@@ -14,6 +14,7 @@ import type { Document as SourceDocument } from '../../src/types/api';
 
 const ACCEPTED_FILE_TYPES =
   '.pdf,.docx,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation';
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 function docTypeFromFilename(filename: string): string {
   const extension = filename.split('.').pop()?.toLowerCase() ?? '';
@@ -81,6 +82,10 @@ export default function NewDesignSessionScreen() {
       }
 
       const file = result.assets[0];
+      if ((file.size ?? 0) > MAX_UPLOAD_BYTES) {
+        setUploadError('Ukuran file terlalu besar. Maksimum 50MB.');
+        return;
+      }
       const formData = new FormData();
       formData.append('file', {
         uri: file.uri,
@@ -106,6 +111,11 @@ export default function NewDesignSessionScreen() {
     setErrorMessage(null);
 
     try {
+      const oversized = files.find((file) => file.size > MAX_UPLOAD_BYTES);
+      if (oversized) {
+        setUploadError('Ukuran file terlalu besar. Maksimum 50MB.');
+        return;
+      }
       for (const file of files) {
         const formData = new FormData();
         formData.append('file', file);

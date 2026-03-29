@@ -23,7 +23,7 @@ function getPageTitle(pathname: string): string {
   if (pathname.startsWith('/personalize/')) return 'Personalisasi';
   if (pathname.startsWith('/chat/')) return 'Chat & Revisi';
   if (pathname.startsWith('/export/')) return 'Ekspor';
-  return 'MyDigiLearn';
+  return 'PRIMA';
 }
 
 export function Header() {

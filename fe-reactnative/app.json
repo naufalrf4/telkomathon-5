@@ -1,9 +1,9 @@
 {
   "expo": {
-    "name": "MyDigiLearn",
-    "slug": "mydigilearn",
+    "name": "PRIMA",
+    "slug": "prima",
     "version": "1.0.0",
-    "scheme": "mydigilearn",
+    "scheme": "prima",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",

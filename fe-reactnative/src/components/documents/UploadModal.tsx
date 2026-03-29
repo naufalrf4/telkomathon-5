@@ -1,7 +1,9 @@
-import { Modal, View, Text, Pressable, ActivityIndicator, Platform } from 'react-native';
+import { Alert, Modal, View, Text, Pressable, ActivityIndicator, Platform } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
+
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 interface UploadModalProps {
   visible: boolean;
@@ -46,6 +48,10 @@ export function UploadModal({
       if (result.canceled) return;
 
       const file = result.assets[0];
+      if ((file.size ?? 0) > MAX_UPLOAD_BYTES) {
+        Alert.alert('Ukuran file terlalu besar', 'Maksimum ukuran file adalah 50MB.');
+        return;
+      }
       const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
       const docTypeMap: Record<string, string> = { pdf: 'pdf', docx: 'docx', pptx: 'pptx' };
       const docType = docTypeMap[ext] ?? 'pdf';

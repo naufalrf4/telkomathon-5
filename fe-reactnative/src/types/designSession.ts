@@ -15,6 +15,7 @@ export type DesignSessionWizardStep =
 export interface SourceSummary {
   summary: string;
   key_points: string[];
+  company_profile_focus: string[];
 }
 
 export interface CourseContextPayload {
@@ -36,7 +37,6 @@ export interface DesignOption {
 export interface ELOOption {
   id: string;
   elo: string;
-  pce: string[];
   rationale: string;
 }
 
@@ -50,6 +50,8 @@ export interface DesignSession {
   selected_tlo: DesignOption | null;
   performance_options: DesignOption[];
   selected_performance: DesignOption | null;
+  preview_condition_result?: string | null;
+  preview_standard_result?: string | null;
   elo_options: ELOOption[];
   selected_elos: ELOOption[];
   finalized_syllabus_id: string | null;

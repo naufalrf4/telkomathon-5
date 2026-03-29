@@ -107,7 +107,7 @@ export function Sidebar() {
       <View className="px-5 border-t border-gray-100 pt-4">
         <Text className="text-gray-400 text-[10px]">Powered by</Text>
         <Text className="text-gray-500 font-semibold text-[10px] mt-0.5">
-          AI Space × Telkom Indonesia
+          PRIMA — Personalized Responsive Intelligent Micro-Learning Assistant
         </Text>
       </View>
     </View>
