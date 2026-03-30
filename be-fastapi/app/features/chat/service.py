@@ -18,7 +18,13 @@ class ChatService:
     def __init__(self, db: AsyncSession) -> None:
         self.db: AsyncSession = db
 
-    async def get_history(self, syllabus_id: uuid.UUID) -> ChatHistoryResponse:
+    async def get_history(
+        self,
+        syllabus_id: uuid.UUID,
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> ChatHistoryResponse:
+        await self._get_owned_syllabus(syllabus_id, owner_id=owner_id)
         result = await self.db.execute(
             select(ChatMessage)
             .where(ChatMessage.syllabus_id == syllabus_id)
@@ -34,13 +40,10 @@ class ChatService:
         self,
         syllabus_id: uuid.UUID,
         content: str,
+        *,
+        owner_id: uuid.UUID | None = None,
     ) -> AsyncIterator[str]:
-        result_row = await self.db.execute(
-            select(GeneratedSyllabus).where(GeneratedSyllabus.id == syllabus_id)
-        )
-        syllabus = result_row.scalar_one_or_none()
-        if syllabus is None:
-            raise NotFoundException("Syllabus", str(syllabus_id))
+        syllabus = await self._get_owned_syllabus(syllabus_id, owner_id=owner_id)
 
         history_result = await self.db.execute(
             select(ChatMessage)
@@ -103,6 +106,21 @@ class ChatService:
         await self.db.commit()
 
         yield "__DONE__"
+
+    async def _get_owned_syllabus(
+        self,
+        syllabus_id: uuid.UUID,
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> GeneratedSyllabus:
+        stmt = select(GeneratedSyllabus).where(GeneratedSyllabus.id == syllabus_id)
+        if owner_id is not None:
+            stmt = stmt.where(GeneratedSyllabus.owner_id == owner_id)
+        result_row = await self.db.execute(stmt)
+        syllabus = result_row.scalar_one_or_none()
+        if syllabus is None:
+            raise NotFoundException("Syllabus", str(syllabus_id))
+        return syllabus
 
     def _fallback_revision_response(self, syllabus: GeneratedSyllabus) -> str:
         performance = syllabus.performance_result or "Performance result saat ini belum tersedia."

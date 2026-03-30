@@ -13,6 +13,9 @@ class Document(Base):
     __tablename__ = "documents"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     filename: Mapped[str] = mapped_column(String(255))
     doc_type: Mapped[str] = mapped_column(String(50))
     file_format: Mapped[str] = mapped_column(String(10))

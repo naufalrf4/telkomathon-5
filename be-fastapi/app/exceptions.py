@@ -64,6 +64,33 @@ class AlreadyFinalizedException(AppException):
         )
 
 
+class AuthenticationException(AppException):
+    def __init__(self, message: str = "Invalid credentials") -> None:
+        super().__init__(
+            message=message,
+            code="AUTHENTICATION_ERROR",
+            status_code=401,
+        )
+
+
+class AuthorizationException(AppException):
+    def __init__(self, message: str = "Not authorized") -> None:
+        super().__init__(
+            message=message,
+            code="AUTHORIZATION_ERROR",
+            status_code=403,
+        )
+
+
+class DuplicateException(AppException):
+    def __init__(self, message: str) -> None:
+        super().__init__(
+            message=message,
+            code="DUPLICATE_ERROR",
+            status_code=409,
+        )
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppException)
     async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:

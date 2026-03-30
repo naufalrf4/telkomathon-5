@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import ClassVar
 
-from sqlalchemy import String
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,6 +16,9 @@ class DesignSession(Base):
     preview_standard_result: ClassVar[str | None] = None
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     document_ids: Mapped[list[str]] = mapped_column(JSONB, default=list)
     wizard_step: Mapped[str] = mapped_column(String(50), default="uploaded")
     source_summary: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)

@@ -2,6 +2,8 @@ import uuid
 
 from fastapi import APIRouter, Depends
 
+from app.features.auth.dependencies import get_current_user
+from app.features.auth.models import User
 from app.features.design_sessions.dependencies import get_design_session_service
 from app.features.design_sessions.schemas import (
     CourseContextRequest,
@@ -19,9 +21,10 @@ router = APIRouter(tags=["design-sessions"])
 
 @router.get("/")
 async def list_design_sessions(
+    current_user: User = Depends(get_current_user),
     service: DesignSessionService = Depends(get_design_session_service),
 ) -> dict[str, object]:
-    sessions = await service.list_sessions()
+    sessions = await service.list_sessions(owner_id=current_user.id)
     serialized = [
         DesignSessionResponse.from_orm_with_coerce(session).model_dump(mode="json")
         for session in sessions
@@ -32,9 +35,10 @@ async def list_design_sessions(
 @router.post("/")
 async def create_design_session(
     request: DesignSessionCreateRequest,
+    current_user: User = Depends(get_current_user),
     service: DesignSessionService = Depends(get_design_session_service),
 ) -> dict[str, object]:
-    session = await service.create_session(request)
+    session = await service.create_session(request, owner_id=current_user.id)
     return success_response(
         DesignSessionResponse.from_orm_with_coerce(session).model_dump(mode="json"),
         "Design session created successfully",
@@ -44,9 +48,10 @@ async def create_design_session(
 @router.get("/{session_id}")
 async def get_design_session(
     session_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
     service: DesignSessionService = Depends(get_design_session_service),
 ) -> dict[str, object]:
-    session = await service.get_session(session_id)
+    session = await service.get_session(session_id, owner_id=current_user.id)
     return success_response(
         DesignSessionResponse.from_orm_with_coerce(session).model_dump(mode="json")
     )
@@ -55,9 +60,10 @@ async def get_design_session(
 @router.post("/{session_id}/start-assist")
 async def start_assist(
     session_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
     service: DesignSessionService = Depends(get_design_session_service),
 ) -> dict[str, object]:
-    session = await service.start_assist(session_id)
+    session = await service.start_assist(session_id, owner_id=current_user.id)
     return success_response(
         DesignSessionResponse.from_orm_with_coerce(session).model_dump(mode="json"),
         "Design session summary generated successfully",
@@ -68,9 +74,10 @@ async def start_assist(
 async def update_course_context(
     session_id: uuid.UUID,
     request: CourseContextRequest,
+    current_user: User = Depends(get_current_user),
     service: DesignSessionService = Depends(get_design_session_service),
 ) -> dict[str, object]:
-    session = await service.update_course_context(session_id, request)
+    session = await service.update_course_context(session_id, request, owner_id=current_user.id)
     return success_response(
         DesignSessionResponse.from_orm_with_coerce(session).model_dump(mode="json"),
         "Course context updated successfully",
@@ -80,9 +87,10 @@ async def update_course_context(
 @router.post("/{session_id}/tlo-options")
 async def generate_tlo_options(
     session_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
     service: DesignSessionService = Depends(get_design_session_service),
 ) -> dict[str, object]:
-    session = await service.generate_tlo_options(session_id)
+    session = await service.generate_tlo_options(session_id, owner_id=current_user.id)
     return success_response(
         DesignSessionResponse.from_orm_with_coerce(session).model_dump(mode="json"),
         "TLO options generated successfully",
@@ -93,9 +101,10 @@ async def generate_tlo_options(
 async def select_tlo(
     session_id: uuid.UUID,
     request: OptionSelectionRequest,
+    current_user: User = Depends(get_current_user),
     service: DesignSessionService = Depends(get_design_session_service),
 ) -> dict[str, object]:
-    session = await service.select_tlo(session_id, request.option_id)
+    session = await service.select_tlo(session_id, request.option_id, owner_id=current_user.id)
     return success_response(
         DesignSessionResponse.from_orm_with_coerce(session).model_dump(mode="json"),
         "TLO selected successfully",
@@ -105,9 +114,10 @@ async def select_tlo(
 @router.post("/{session_id}/performance-options")
 async def generate_performance_options(
     session_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
     service: DesignSessionService = Depends(get_design_session_service),
 ) -> dict[str, object]:
-    session = await service.generate_performance_options(session_id)
+    session = await service.generate_performance_options(session_id, owner_id=current_user.id)
     return success_response(
         DesignSessionResponse.from_orm_with_coerce(session).model_dump(mode="json"),
         "Performance options generated successfully",
@@ -118,9 +128,12 @@ async def generate_performance_options(
 async def select_performance(
     session_id: uuid.UUID,
     request: OptionSelectionRequest,
+    current_user: User = Depends(get_current_user),
     service: DesignSessionService = Depends(get_design_session_service),
 ) -> dict[str, object]:
-    session = await service.select_performance(session_id, request.option_id)
+    session = await service.select_performance(
+        session_id, request.option_id, owner_id=current_user.id
+    )
     return success_response(
         DesignSessionResponse.from_orm_with_coerce(session).model_dump(mode="json"),
         "Performance option selected successfully",
@@ -130,9 +143,10 @@ async def select_performance(
 @router.post("/{session_id}/elo-options")
 async def generate_elo_options(
     session_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
     service: DesignSessionService = Depends(get_design_session_service),
 ) -> dict[str, object]:
-    session = await service.generate_elo_options(session_id)
+    session = await service.generate_elo_options(session_id, owner_id=current_user.id)
     return success_response(
         DesignSessionResponse.from_orm_with_coerce(session).model_dump(mode="json"),
         "ELO options generated successfully",
@@ -143,9 +157,10 @@ async def generate_elo_options(
 async def select_elos(
     session_id: uuid.UUID,
     request: ELOSelectionRequest,
+    current_user: User = Depends(get_current_user),
     service: DesignSessionService = Depends(get_design_session_service),
 ) -> dict[str, object]:
-    session = await service.select_elos(session_id, request.option_ids)
+    session = await service.select_elos(session_id, request.option_ids, owner_id=current_user.id)
     return success_response(
         DesignSessionResponse.from_orm_with_coerce(session).model_dump(mode="json"),
         "ELO options selected successfully",
@@ -155,9 +170,10 @@ async def select_elos(
 @router.post("/{session_id}/finalize")
 async def finalize_design_session(
     session_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
     service: DesignSessionService = Depends(get_design_session_service),
 ) -> dict[str, object]:
-    session, syllabus = await service.finalize(session_id)
+    session, syllabus = await service.finalize(session_id, owner_id=current_user.id)
     return success_response(
         {
             "session": DesignSessionResponse.from_orm_with_coerce(session).model_dump(mode="json"),

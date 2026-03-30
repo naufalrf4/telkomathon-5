@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, Integer, String, Text
+from sqlalchemy import CheckConstraint, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,6 +14,9 @@ class GeneratedSyllabus(Base):
     __table_args__ = (CheckConstraint("target_level BETWEEN 1 AND 5", name="ck_target_level"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     topic: Mapped[str] = mapped_column(String(255))
     target_level: Mapped[int] = mapped_column(Integer)
     course_category: Mapped[str | None] = mapped_column(String(255), nullable=True)
