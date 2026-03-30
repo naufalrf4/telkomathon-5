@@ -7,6 +7,8 @@ const PAGE_TITLES: Record<string, string> = {
   '/syllabus': 'Syllabus',
   '/syllabus/generated': 'Generated Syllabus',
   '/syllabus/create': 'Create Syllabus',
+  '/syllabus/history': 'History & CSV',
+  '/syllabus/roadmap': 'Career Roadmap',
   '/design-session': 'Resume Create Flow',
   '/syllabus/generate': 'Create Syllabus',
   '/design-session/new': 'Create Syllabus',
@@ -16,6 +18,9 @@ function getPageTitle(pathname: string): string {
   if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
   if (pathname.startsWith('/documents/')) return 'Detail Dokumen';
   if (pathname.startsWith('/syllabus/create/')) return 'Create Syllabus';
+  if (pathname.match(/^\/syllabus\/[^/]+\/bulk$/)) return 'Bulk Recommendation';
+  if (pathname.match(/^\/syllabus\/[^/]+\/roadmap$/)) return 'Career Roadmap';
+  if (pathname.match(/^\/syllabus\/[^/]+\/modules$/)) return 'Module Decomposition';
   if (pathname.startsWith('/design-session/')) return 'Resume Create Flow';
   if (pathname.match(/^\/syllabus\/[^/]+\/revision$/)) return 'Revision Workspace';
   if (pathname.match(/^\/syllabus\/[^/]+\/export$/)) return 'Export DOCX';

@@ -227,6 +227,13 @@ export default function NewDesignSessionScreen() {
                 </div>
                 <Text className="text-xl font-bold text-gray-900">Drag & drop file</Text>
                 <Text className="text-center text-gray-500">PDF, DOCX, atau PPTX • maks {MAX_UPLOAD_MB}MB</Text>
+                <View className="flex-row flex-wrap gap-2 mt-2">
+                  {['PDF', 'DOCX', 'PPTX'].map((label) => (
+                    <View key={label} className="rounded-full bg-gray-100 px-3 py-1">
+                      <Text className="text-xs font-semibold text-gray-600">{label}</Text>
+                    </View>
+                  ))}
+                </View>
               </div>
             </div>
           </>
@@ -237,11 +244,32 @@ export default function NewDesignSessionScreen() {
                  <Ionicons name="cloud-upload-outline" size={32} color={colors.primary} />
                </View>
                <Text className="text-xl font-bold text-gray-900">Unggah file</Text>
-               <Text className="text-center text-gray-500">PDF, DOCX, atau PPTX • maks {MAX_UPLOAD_MB}MB</Text>
-               <Button title="Pilih Dokumen" onPress={() => void uploadNativeDocument()} isLoading={isUploading} />
-             </View>
-           </Card>
-         )}
+                <Text className="text-center text-gray-500">PDF, DOCX, atau PPTX • maks {MAX_UPLOAD_MB}MB</Text>
+                <View className="flex-row flex-wrap justify-center gap-2">
+                  {['PDF', 'DOCX', 'PPTX'].map((label) => (
+                    <View key={label} className="rounded-full bg-gray-100 px-3 py-1">
+                      <Text className="text-xs font-semibold text-gray-600">{label}</Text>
+                    </View>
+                  ))}
+                </View>
+                <Button title="Pilih Dokumen" onPress={() => void uploadNativeDocument()} isLoading={isUploading} />
+              </View>
+            </Card>
+          )}
+
+        {isUploading ? (
+          <Card className="border border-primary/20 bg-red-50">
+            <View className="flex-row items-center gap-3">
+              <LoadingSpinner />
+              <View className="flex-1">
+                <Text className="text-sm font-semibold text-primary">Sedang mengunggah dan memproses dokumen</Text>
+                <Text className="mt-1 text-sm text-gray-600">
+                  Tunggu sampai status berubah menjadi <Text className="font-semibold text-emerald-700">ready</Text> sebelum menekan Lanjut.
+                </Text>
+              </View>
+            </View>
+          </Card>
+        ) : null}
 
         {isLoading && !documents ? (
           <Card>
@@ -306,7 +334,7 @@ export default function NewDesignSessionScreen() {
                           {(document.doc_type ?? document.file_type).toUpperCase()} • {document.status}
                         </Text>
                       {!isReady ? (
-                        <Text className="text-sm text-amber-600">Masih diproses</Text>
+                        <Text className="text-sm text-amber-600">Masih diproses • Anda bisa tetap menambah file lain sambil menunggu</Text>
                       ) : null}
                     </View>
                     <View className={`w-7 h-7 rounded-full items-center justify-center ${isSelected ? 'bg-primary' : 'bg-gray-100'}`}>

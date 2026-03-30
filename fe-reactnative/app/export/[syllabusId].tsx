@@ -1,12 +1,12 @@
-import { Linking, Platform, ScrollView, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Platform, ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSyllabus } from '../../src/hooks/useSyllabus';
-import { getErrorMessage } from '../../src/services/api';
+import { apiGetBlob, getErrorMessage } from '../../src/services/api';
 import { Button } from '../../src/components/ui/Button';
 import { Card } from '../../src/components/ui/Card';
 import { LoadingSpinner } from '../../src/components/ui/LoadingSpinner';
-import { designSessionsService } from '../../src/services/designSessions';
 import { colors } from '../../src/theme/colors';
 import { emptyLearningJourney, syllabusTitle } from '../../src/utils/syllabus';
 import type { LearningJourneyStage } from '../../src/types/api';
@@ -21,14 +21,33 @@ export default function ExportScreen() {
   const syllabusId = syllabusIdParam ?? id ?? '';
   const router = useRouter();
   const { syllabus, isLoading, error, refetch } = useSyllabus(syllabusId);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const handleDownload = async () => {
-    const url = designSessionsService.getSyllabusDocxDownloadUrl(syllabusId);
-    if (Platform.OS === 'web') {
-      window.open(url, '_blank');
-      return;
+    try {
+      setIsDownloading(true);
+      setDownloadError(null);
+      const blob = await apiGetBlob(`/syllabi/${syllabusId}/download.docx`);
+
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        const objectUrl = window.URL.createObjectURL(blob);
+        const link = window.document.createElement('a');
+        link.href = objectUrl;
+        link.download = `${syllabusTitle(syllabus ?? { topic: 'syllabus' } as never)}.docx`;
+        window.document.body.appendChild(link);
+        link.click();
+        window.document.body.removeChild(link);
+        window.URL.revokeObjectURL(objectUrl);
+        return;
+      }
+
+      setDownloadError('Unduhan langsung mobile belum diaktifkan untuk mode auth. Gunakan web terlebih dahulu.');
+    } catch (downloadActionError) {
+      setDownloadError(getErrorMessage(downloadActionError, 'Gagal mengunduh DOCX.'));
+    } finally {
+      setIsDownloading(false);
     }
-    await Linking.openURL(url);
   };
 
   const journey = syllabus?.journey ?? emptyLearningJourney();
@@ -112,9 +131,14 @@ export default function ExportScreen() {
                 <Text className="text-xs text-gray-400">{new Date().toLocaleDateString()}</Text>
               </View>
               <View className="w-full gap-3">
-                <Button title="Unduh DOCX" onPress={handleDownload} size="lg" className="w-full rounded-xl bg-primary py-4 shadow-md" icon={<Ionicons name="download-outline" size={20} color="white" />} />
+                <Button title="Unduh DOCX" onPress={() => void handleDownload()} isLoading={isDownloading} size="lg" className="w-full rounded-xl bg-primary py-4 shadow-md" icon={<Ionicons name="download-outline" size={20} color="white" />} />
                 <Button title="Kembali ke Silabus" variant="ghost" onPress={() => router.push(`/syllabus/${syllabusId}`)} className="w-full py-3" textClassName="font-medium text-gray-500" />
               </View>
+              {downloadError ? (
+                <View className="mt-4 w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                  <Text className="text-sm text-red-700">{downloadError}</Text>
+                </View>
+              ) : null}
             </View>
           </Card>
 
@@ -216,6 +240,10 @@ function JourneyPreviewCard({ title, stage }: { title: string; stage: LearningJo
       <Text className="text-sm font-semibold text-gray-900">{title}</Text>
       <Text className="mt-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Duration</Text>
       <Text className="mt-1 text-sm text-gray-700">{previewText(stage.duration)}</Text>
+      <Text className="mt-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Method</Text>
+      <View className="mt-2 gap-1">
+        {stage.method.length > 0 ? stage.method.map((item, index) => <Text key={`${title}-method-${index}`} className="text-sm text-gray-700">- {item}</Text>) : <Text className="text-sm italic text-gray-400">Belum ada metode.</Text>}
+      </View>
       <Text className="mt-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Description</Text>
       <Text className="mt-1 text-sm text-gray-700">{previewText(stage.description)}</Text>
       <Text className="mt-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Content</Text>

@@ -1,4 +1,4 @@
-import { useRef, type ChangeEvent } from 'react';
+import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import { Alert, Modal, View, Text, Pressable, ActivityIndicator, Platform } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,6 +39,7 @@ export function UploadModal({
   uploadSuccess,
 }: UploadModalProps) {
   const webInputRef = useRef<HTMLInputElement | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const handleWebFiles = (files: FileList | null) => {
     const file = files?.[0];
@@ -64,6 +65,23 @@ export function UploadModal({
   const handleWebInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     handleWebFiles(event.target.files);
     event.target.value = '';
+  };
+
+  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+    handleWebFiles(event.dataTransfer.files);
   };
 
   const handlePickDocument = async () => {
@@ -125,6 +143,9 @@ export function UploadModal({
             <View className="items-center py-8">
               <ActivityIndicator size="large" color={colors.primary} />
               <Text className="mt-4 text-gray-600 font-medium">Mengunggah dokumen...</Text>
+              <Text className="mt-2 text-center text-sm text-gray-500">
+                Dokumen sedang dikirim dan diproses. Tunggu sampai status dokumen berubah menjadi ready.
+              </Text>
             </View>
           ) : uploadSuccess ? (
             <View className="items-center py-4">
@@ -186,27 +207,81 @@ export function UploadModal({
                 </Pressable>
               </View>
               
-                <Text className="text-gray-500 mb-8 leading-relaxed">
+              <Text className="text-gray-500 mb-8 leading-relaxed">
                   Pilih file materi pembelajaran Anda (PDF, DOCX, atau PPTX) untuk dianalisis oleh AI.
                  Maksimum ukuran file {MAX_UPLOAD_MB}MB.
                 </Text>
 
-              <View className="gap-3">
-                <Pressable
-                  onPress={handlePickDocument}
-                  className="bg-primary py-3.5 rounded-xl items-center flex-row justify-center gap-2 shadow-sm"
-                >
-                  <Ionicons name="document-text" size={20} color="white" />
-                  <Text className="font-semibold text-white text-base">Pilih File</Text>
-                </Pressable>
-                
-                <Pressable
-                  onPress={onClose}
-                  className="py-3.5 rounded-xl items-center"
-                >
-                  <Text className="font-semibold text-gray-500">Batal</Text>
-                </Pressable>
+              <View className="mb-6 flex-row flex-wrap gap-2">
+                {['PDF', 'DOCX', 'PPTX'].map((label) => (
+                  <View key={label} className="rounded-full bg-gray-100 px-3 py-1">
+                    <Text className="text-xs font-semibold text-gray-600">{label}</Text>
+                  </View>
+                ))}
+                <View className="rounded-full bg-red-50 px-3 py-1">
+                  <Text className="text-xs font-semibold text-primary">Maks {MAX_UPLOAD_MB}MB</Text>
+                </View>
               </View>
+
+              {Platform.OS === 'web' ? (
+                <>
+                  <div
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    onClick={() => webInputRef.current?.click()}
+                    style={{
+                      borderWidth: 2,
+                      borderStyle: 'dashed',
+                      borderColor: isDragging ? colors.primary : colors.border,
+                      backgroundColor: isDragging ? '#FFF1F2' : '#F9FAFB',
+                      borderRadius: 16,
+                      padding: 24,
+                      cursor: 'pointer',
+                      transition: 'all 150ms ease',
+                      marginBottom: 16,
+                    }}
+                  >
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                      <Ionicons name="cloud-upload-outline" size={28} color={colors.primary} />
+                      <Text className="text-lg font-bold text-gray-900">Drag & drop file</Text>
+                      <Text className="text-center text-gray-500">Klik area ini atau jatuhkan file untuk mulai upload</Text>
+                    </div>
+                  </div>
+                  <View className="gap-3">
+                    <Pressable
+                      onPress={handlePickDocument}
+                      className="bg-primary py-3.5 rounded-xl items-center flex-row justify-center gap-2 shadow-sm"
+                    >
+                      <Ionicons name="document-text" size={20} color="white" />
+                      <Text className="font-semibold text-white text-base">Pilih File Manual</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={onClose}
+                      className="py-3.5 rounded-xl items-center"
+                    >
+                      <Text className="font-semibold text-gray-500">Batal</Text>
+                    </Pressable>
+                  </View>
+                </>
+              ) : (
+                <View className="gap-3">
+                  <Pressable
+                    onPress={handlePickDocument}
+                    className="bg-primary py-3.5 rounded-xl items-center flex-row justify-center gap-2 shadow-sm"
+                  >
+                    <Ionicons name="document-text" size={20} color="white" />
+                    <Text className="font-semibold text-white text-base">Pilih File</Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={onClose}
+                    className="py-3.5 rounded-xl items-center"
+                  >
+                    <Text className="font-semibold text-gray-500">Batal</Text>
+                  </Pressable>
+                </View>
+              )}
             </View>
           )}
         </View>

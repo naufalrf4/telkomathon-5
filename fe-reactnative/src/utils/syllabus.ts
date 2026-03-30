@@ -22,9 +22,9 @@ export function getSyllabusStatusLabel(status: string | null | undefined): strin
 
 export function emptyLearningJourney(): LearningJourney {
   return {
-    pre_learning: { duration: '', description: '', content: [] },
-    classroom: { duration: '', description: '', content: [] },
-    after_learning: { duration: '', description: '', content: [] },
+    pre_learning: { duration: '', method: [], description: '', content: [] },
+    classroom: { duration: '', method: [], description: '', content: [] },
+    after_learning: { duration: '', method: [], description: '', content: [] },
   };
 }
 

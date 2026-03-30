@@ -26,6 +26,8 @@ export default function SyllabusDetailScreen() {
   const router = useRouter();
   const { syllabus, isLoading, error, refetch } = useSyllabus(id as string);
   const journey = syllabus?.journey ?? emptyLearningJourney();
+  const currentVersion = (syllabus?.revision_history.length ?? 0) + 1;
+  const latestRevision = syllabus?.revision_history[syllabus.revision_history.length - 1] ?? null;
 
   if (isLoading && !syllabus) {
     return <LoadingSpinner fullScreen message="Memuat detail kursus..." />;
@@ -69,8 +71,8 @@ export default function SyllabusDetailScreen() {
   return (
     <ScrollView className="flex-1 bg-gray-50" showsVerticalScrollIndicator={false}>
       <View className="mx-auto w-full max-w-7xl p-4 lg:p-8">
-        <View className="mb-8 flex-col items-start justify-between gap-4 lg:flex-row lg:items-center">
-          <View>
+        <View className="mb-8 flex-col items-start justify-between gap-6 xl:flex-row xl:items-center">
+          <View className="flex-1 pr-0 xl:pr-4">
             <View className="mb-2 flex-row items-center space-x-2">
               <Pressable onPress={() => router.back()} className="-ml-1 p-1">
                 <Ionicons name="arrow-back" size={24} color={colors.secondary} />
@@ -85,6 +87,10 @@ export default function SyllabusDetailScreen() {
           <View className="flex-row flex-wrap gap-3">
             <Button title="Revision Workspace" variant="secondary" icon={<Ionicons name="chatbubbles-outline" size={18} color="white" />} onPress={() => router.push(`/syllabus/${id}/revision`)} className="shadow-sm" />
             <Button title="Personalisasi" variant="primary" icon={<Ionicons name="options-outline" size={18} color="white" />} onPress={() => router.push(`/personalize/${id}`)} className="shadow-sm" />
+            <Button title="Bulk" variant="outline" icon={<Ionicons name="people-outline" size={18} color={colors.secondary} />} onPress={() => router.push(`/syllabus/${id}/bulk`)} />
+            <Button title="Roadmap" variant="outline" icon={<Ionicons name="git-network-outline" size={18} color={colors.secondary} />} onPress={() => router.push(`/syllabus/${id}/roadmap`)} />
+            <Button title="Modules" variant="outline" icon={<Ionicons name="layers-outline" size={18} color={colors.secondary} />} onPress={() => router.push(`/syllabus/${id}/modules`)} />
+            <Button title="History" variant="outline" icon={<Ionicons name="time-outline" size={18} color={colors.secondary} />} onPress={() => router.push({ pathname: '/syllabus/history', params: { syllabusId: id as string } })} />
             <Button title="Ekspor DOCX" variant="outline" icon={<Ionicons name="document-text-outline" size={18} color={colors.secondary} />} onPress={() => router.push(`/syllabus/${id}/export`)} />
           </View>
         </View>
@@ -102,7 +108,9 @@ export default function SyllabusDetailScreen() {
           <Card className="flex-1 border border-gray-100 bg-white shadow-sm">
             <View className="gap-2">
               <Text className="text-xs font-bold uppercase tracking-[0.2em] text-gray-400">Revision Readiness</Text>
+              <Text className="text-sm text-gray-700">Version aktif: {currentVersion}</Text>
               <Text className="text-sm text-gray-700">Riwayat revisi: {syllabus.revision_history.length}</Text>
+              {latestRevision?.summary ? <Text className="text-sm text-gray-600">Latest revision: {latestRevision.summary}</Text> : null}
               <Text className="text-sm text-gray-600">Performance: {syllabus.performance_result || 'Belum tersedia'}</Text>
               <Text className="text-sm text-gray-600">Condition: {syllabus.condition_result || 'Belum tersedia'}</Text>
               <Text className="text-sm text-gray-600">Standard: {syllabus.standard_result || 'Belum tersedia'}</Text>
@@ -178,6 +186,7 @@ function JourneyCard({ title, stage, icon, accentColor, bgColor, iconColor }: Jo
       </View>
       <View className="space-y-4 p-4">
         <StageField label="Duration" value={stage.duration} fallback="Belum diisi" />
+        <StageListField label="Method" values={stage.method} fallback="Belum diisi" />
         <StageField label="Description" value={stage.description} fallback="Belum diisi" />
         <View className="gap-2">
           <Text className="text-xs font-bold uppercase tracking-wide text-gray-400">Content</Text>
@@ -193,6 +202,24 @@ function JourneyCard({ title, stage, icon, accentColor, bgColor, iconColor }: Jo
           )}
         </View>
       </View>
+    </View>
+  );
+}
+
+function StageListField({ label, values, fallback }: { label: string; values: string[]; fallback: string }) {
+  return (
+    <View className="gap-2">
+      <Text className="text-xs font-bold uppercase tracking-wide text-gray-400">{label}</Text>
+      {values.length > 0 ? (
+        values.map((value, index) => (
+          <View key={`${label}-${index}`} className="flex-row items-start">
+            <View className="mr-2 mt-1.5 h-1.5 w-1.5 rounded-full bg-primary" />
+            <Text className="flex-1 text-sm leading-5 text-gray-700">{value}</Text>
+          </View>
+        ))
+      ) : (
+        <Text className="text-sm leading-6 text-gray-700">{fallback}</Text>
+      )}
     </View>
   );
 }

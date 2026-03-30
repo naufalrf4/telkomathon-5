@@ -48,14 +48,16 @@ function textToList(value: string): string[] {
 function stageToDraft(stage: LearningJourneyStage) {
   return {
     duration: stage.duration,
+    method: listToText(stage.method),
     description: stage.description,
     content: listToText(stage.content),
   };
 }
 
-function draftToStage(stage: { duration: string; description: string; content: string }): LearningJourneyStage {
+function draftToStage(stage: { duration: string; method: string; description: string; content: string }): LearningJourneyStage {
   return {
     duration: stage.duration.trim(),
+    method: textToList(stage.method),
     description: stage.description.trim(),
     content: textToList(stage.content),
   };
@@ -65,7 +67,8 @@ export default function ChatScreen() {
   const { syllabusId: syllabusIdParam, id } = useLocalSearchParams<{ syllabusId?: string; id?: string }>();
   const syllabusId = syllabusIdParam ?? id ?? '';
   const router = useRouter();
-  const { syllabus, isLoading: isLoadingSyllabus, applyRevisionAsync, isApplyingRevision } = useSyllabus(syllabusId);
+  const { syllabus, revisions, isLoading: isLoadingSyllabus, applyRevisionAsync, isApplyingRevision } = useSyllabus(syllabusId, { includeRevisions: true });
+  const currentRevisionNumber = (syllabus?.revision_history.length ?? 0) + 1;
 
   const {
     data: history,
@@ -89,9 +92,9 @@ export default function ChatScreen() {
   const [conditionDraft, setConditionDraft] = useState('');
   const [standardDraft, setStandardDraft] = useState('');
   const [eloDraft, setEloDraft] = useState('');
-  const [preLearningDraft, setPreLearningDraft] = useState({ duration: '', description: '', content: '' });
-  const [classroomDraft, setClassroomDraft] = useState({ duration: '', description: '', content: '' });
-  const [afterLearningDraft, setAfterLearningDraft] = useState({ duration: '', description: '', content: '' });
+  const [preLearningDraft, setPreLearningDraft] = useState({ duration: '', method: '', description: '', content: '' });
+  const [classroomDraft, setClassroomDraft] = useState({ duration: '', method: '', description: '', content: '' });
+  const [afterLearningDraft, setAfterLearningDraft] = useState({ duration: '', method: '', description: '', content: '' });
   const [applyError, setApplyError] = useState<string | null>(null);
   const [applySuccess, setApplySuccess] = useState<string | null>(null);
 
@@ -254,10 +257,28 @@ export default function ChatScreen() {
             <View className="flex-1">
               <Text className="text-2xl font-bold text-gray-900">Revision Workspace</Text>
               <Text className="text-gray-500">
-                {syllabus ? syllabusTitle(syllabus) : 'Syllabus'} - review AI suggestions, then apply the exact structured update.
+                {syllabus ? syllabusTitle(syllabus) : 'Syllabus'} - review AI suggestions, then apply the exact structured update for Version {currentRevisionNumber + 1}.
               </Text>
             </View>
           </View>
+
+          {revisions && revisions.length > 0 ? (
+            <Card title="Revision Timeline" subtitle={`Version aktif saat ini: ${currentRevisionNumber}`}>
+              <View className="gap-3">
+                {revisions.slice().reverse().map((note) => (
+                  <View key={`revision-${note.revision_index}`} className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                    <View className="flex-row items-center justify-between gap-3">
+                      <Text className="font-semibold text-gray-900">Version {note.revision_index + 1}{note.is_current ? ' · Current' : ''}</Text>
+                      <Text className="text-xs uppercase tracking-wide text-gray-400">{note.source_kind}</Text>
+                    </View>
+                    <Text className="mt-2 text-sm text-gray-700">{note.summary || 'Revision note belum diisi.'}</Text>
+                    {note.reason ? <Text className="mt-1 text-sm text-gray-500">Reason: {note.reason}</Text> : null}
+                    {note.source_message_excerpt ? <Text className="mt-2 text-xs text-gray-500">AI provenance: {note.source_message_excerpt}</Text> : null}
+                  </View>
+                ))}
+              </View>
+            </Card>
+          ) : null}
 
           {historyError ? (
             <Card className="border border-amber-200 bg-amber-50">
@@ -418,13 +439,14 @@ function JourneyStageField({
   onChange,
 }: {
   label: string;
-  value: { duration: string; description: string; content: string };
-  onChange: (value: { duration: string; description: string; content: string }) => void;
+  value: { duration: string; method: string; description: string; content: string };
+  onChange: (value: { duration: string; method: string; description: string; content: string }) => void;
 }) {
   return (
     <View className="gap-3 rounded-2xl border border-gray-200 bg-gray-50 p-4">
       <Text className="font-semibold text-gray-900">{label}</Text>
       <TextInput value={value.duration} onChangeText={(duration) => onChange({ ...value, duration })} placeholder="Duration" className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-gray-900" />
+      <TextInput value={value.method} onChangeText={(method) => onChange({ ...value, method })} placeholder="Method" multiline textAlignVertical="top" className="min-h-[80px] rounded-xl border border-gray-200 bg-white px-4 py-3 text-gray-900" />
       <TextInput value={value.description} onChangeText={(description) => onChange({ ...value, description })} placeholder="Description" multiline textAlignVertical="top" className="min-h-[80px] rounded-xl border border-gray-200 bg-white px-4 py-3 text-gray-900" />
       <TextInput value={value.content} onChangeText={(content) => onChange({ ...value, content })} placeholder="Content (satu baris per item)" multiline textAlignVertical="top" className="min-h-[120px] rounded-xl border border-gray-200 bg-white px-4 py-3 text-gray-900" />
     </View>

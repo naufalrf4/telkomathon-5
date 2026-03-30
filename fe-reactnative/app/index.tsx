@@ -99,9 +99,18 @@ export default function DashboardScreen() {
       showsVerticalScrollIndicator={false}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
-      <View className="mb-8 mt-2">
-        <Text className="text-3xl font-bold text-gray-900 mb-2">Selamat datang, Pengajar!</Text>
-        <Text className="text-gray-500 text-lg">Siap merancang kurikulum Anda berikutnya?</Text>
+      <View className="mb-8 mt-2 rounded-3xl border border-gray-100 bg-white px-6 py-6 shadow-sm">
+        <View className="flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <View className="flex-1">
+            <Text className="text-xs font-bold uppercase tracking-[0.25em] text-primary">PRIMA Workspace</Text>
+            <Text className="mt-2 text-3xl font-bold text-gray-900 mb-2">Selamat datang, Pengajar!</Text>
+            <Text className="text-gray-500 text-lg">Siap merancang kurikulum, roadmap, dan rekomendasi belajar Anda berikutnya?</Text>
+          </View>
+          <View className="rounded-2xl bg-red-50 px-4 py-3 border border-red-100">
+            <Text className="text-xs font-bold uppercase tracking-[0.2em] text-primary">Active shell</Text>
+            <Text className="mt-1 text-sm text-gray-600">Auth, syllabus, revision, bulk, roadmap, history, and export are now connected in one flow.</Text>
+          </View>
+        </View>
       </View>
 
       {dashboardError ? (
@@ -197,11 +206,29 @@ export default function DashboardScreen() {
             </View>
           <View style={{ flex: isDesktop ? 1 : undefined }}>
               <QuickActionCard
+                title="Career Roadmap"
+                description="Bangun roadmap pengembangan karier peserta dari syllabus final dan competency gap." 
+                iconName="git-network-outline"
+                onPress={() => router.push('/syllabus/roadmap')}
+                color={colors.aiAccent}
+              />
+            </View>
+          <View style={{ flex: isDesktop ? 1 : undefined }}>
+              <QuickActionCard
                 title="Silabus Saya"
                 description="Lihat syllabus final yang siap direvisi dan diekspor."
                 iconName="library"
                 onPress={() => router.push('/syllabus/generated')}
                 color={colors.secondary}
+                />
+            </View>
+          <View style={{ flex: isDesktop ? 1 : undefined }}>
+              <QuickActionCard
+                title="Riwayat & CSV"
+                description="Lihat jejak aktivitas syllabus dan export CSV owner-scoped."
+                iconName="time"
+                onPress={() => router.push('/syllabus/history')}
+                color={colors.info}
               />
             </View>
         </View>

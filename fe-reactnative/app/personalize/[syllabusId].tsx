@@ -1,8 +1,9 @@
-import { View, Text, ScrollView, Alert } from 'react-native';
+import { View, Text, ScrollView, Alert, TextInput } from 'react-native';
 import { useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSyllabus } from '../../src/hooks/useSyllabus';
 import { Button } from '../../src/components/ui/Button';
+import { Card } from '../../src/components/ui/Card';
 import { GapInputCard } from '../../src/components/personalize/GapInputCard';
 import { RecommendationCard } from '../../src/components/personalize/RecommendationCard';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,13 +37,14 @@ const groupRecommendations = (recommendations: LearningRecommendation[]) => {
 export default function PersonalizeScreen() {
   const { syllabusId } = useLocalSearchParams();
   const router = useRouter();
-  const { personalize, isPersonalizing, personalization } = useSyllabus(syllabusId as string, {
+  const { personalize, isPersonalizing, personalization, syllabus } = useSyllabus(syllabusId as string, {
     includePersonalization: true,
   });
 
   const [gaps, setGaps] = useState<CompetencyGap[]>([
     { skill: '', current_level: 1, required_level: 3, gap_description: '' }
   ]);
+  const [participantName, setParticipantName] = useState('');
 
   const addGap = () => {
     setGaps([...gaps, { skill: '', current_level: 1, required_level: 3, gap_description: '' }]);
@@ -73,16 +75,20 @@ export default function PersonalizeScreen() {
   };
 
   const handleSubmit = () => {
+    if (!participantName.trim()) {
+      Alert.alert('Kesalahan', 'Nama peserta wajib diisi');
+      return;
+    }
     const validGaps = gaps.filter(g => g.skill.trim() !== '');
     if (validGaps.length === 0) {
       Alert.alert('Kesalahan', 'Harap tambahkan setidaknya satu kesenjangan kompetensi');
       return;
     }
-    personalize(validGaps);
+    personalize({ participantName: participantName.trim(), gaps: validGaps });
   };
 
   if (personalization) {
-    return <PersonalizationResultView result={personalization} onBack={() => router.back()} />;
+    return <PersonalizationResultView result={personalization} currentRevisionIndex={syllabus?.revision_history.length ?? 0} onBack={() => router.back()} />;
   }
 
   return (
@@ -101,7 +107,38 @@ export default function PersonalizeScreen() {
           </View>
         </View>
 
+        <Card className="mb-6 border border-indigo-100 bg-indigo-50">
+          <View className="flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <View className="flex-1">
+              <Text className="font-semibold text-indigo-900">Butuh rekomendasi untuk banyak peserta?</Text>
+              <Text className="mt-1 text-sm text-indigo-700">Gunakan bulk recommendation untuk upload/paste CSV peserta dan memproses beberapa gap sekaligus.</Text>
+            </View>
+            <Button
+              title="Buka Bulk Recommendation"
+              variant="outline"
+              onPress={() => router.push(`/syllabus/${syllabusId}/bulk`)}
+              icon={<Ionicons name="people-outline" size={18} color={colors.secondary} />}
+            />
+          </View>
+        </Card>
+
         <View className="space-y-6">
+          <Card className="border border-gray-200 bg-white shadow-sm rounded-xl">
+            <View className="gap-2">
+              <Text className="text-xs font-medium text-gray-500">Nama Peserta *</Text>
+              <Text className="text-sm text-gray-500">Masukkan nama peserta agar rekomendasi dan riwayat personalisasi tersimpan jelas.</Text>
+              <View className="rounded-lg border border-gray-300 bg-white px-3 py-1">
+                <TextInput
+                  className="py-2 text-gray-900"
+                  placeholder="contoh: Aulia Rahman"
+                  placeholderTextColor="#9CA3AF"
+                  value={participantName}
+                  onChangeText={setParticipantName}
+                />
+              </View>
+            </View>
+          </Card>
+
           {gaps.map((gap, index) => (
             <GapInputCard
               key={index}
@@ -136,8 +173,9 @@ export default function PersonalizeScreen() {
   );
 }
 
-function PersonalizationResultView({ result, onBack }: { result: PersonalizationResult, onBack: () => void }) {
+function PersonalizationResultView({ result, currentRevisionIndex, onBack }: { result: PersonalizationResult, currentRevisionIndex: number, onBack: () => void }) {
   const grouped = groupRecommendations(result.recommendations);
+  const isOutdated = result.revision_index !== currentRevisionIndex;
   
   const getPriorityText = (priority: string) => {
     if (priority === 'High') return 'Prioritas Tinggi';
@@ -147,8 +185,8 @@ function PersonalizationResultView({ result, onBack }: { result: Personalization
 
   return (
     <ScrollView className="flex-1 bg-gray-50">
-      <View className="max-w-5xl mx-auto w-full p-6">
-        <View className="mb-8 flex-row items-center">
+        <View className="max-w-5xl mx-auto w-full p-6">
+          <View className="mb-8 flex-row items-center">
           <Button 
             variant="ghost" 
             onPress={onBack} 
@@ -157,9 +195,18 @@ function PersonalizationResultView({ result, onBack }: { result: Personalization
           />
           <View>
             <Text className="text-2xl font-bold text-gray-900">Rencana Personal Anda</Text>
-            <Text className="text-gray-500 mt-1">Berdasarkan analisis kesenjangan Anda</Text>
+            <Text className="text-gray-500 mt-1">Peserta: {result.participant_name || 'Tanpa nama peserta'}</Text>
           </View>
         </View>
+
+        <Card className={`mb-6 ${isOutdated ? 'border border-amber-200 bg-amber-50' : 'border border-emerald-200 bg-emerald-50'}`}>
+          <Text className={`font-semibold ${isOutdated ? 'text-amber-700' : 'text-emerald-700'}`}>
+            {isOutdated ? 'Hasil personalisasi ini berasal dari revision lama' : 'Hasil personalisasi sudah sinkron dengan revision aktif'}
+          </Text>
+          <Text className={`mt-1 text-sm ${isOutdated ? 'text-amber-700' : 'text-emerald-700'}`}>
+            Dibuat dari Version {result.revision_index + 1}. Revision aktif saat ini: Version {currentRevisionIndex + 1}.
+          </Text>
+        </Card>
 
         {Object.entries(grouped).map(([priority, items]) => (
           items.length > 0 && (
