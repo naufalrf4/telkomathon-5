@@ -4,6 +4,8 @@ interface ApiEnvelope<T> {
   status?: string;
 }
 
+import { getAccessToken } from '../auth/session';
+
 interface ApiErrorPayload {
   detail?: string;
   message?: string;
@@ -162,15 +164,32 @@ async function parseResponse<T>(res: Response): Promise<T> {
   return json.data;
 }
 
+function buildHeaders(init?: HeadersInit, includeJson = false): Headers {
+  const headers = new Headers(init);
+  const accessToken = getAccessToken();
+
+  if (includeJson && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  if (accessToken && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${accessToken}`);
+  }
+
+  return headers;
+}
+
 export async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(`${getBaseURL()}${path}`);
+  const res = await fetch(`${getBaseURL()}${path}`, {
+    headers: buildHeaders(),
+  });
   return parseResponse<T>(res);
 }
 
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${getBaseURL()}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: buildHeaders(undefined, true),
     body: JSON.stringify(body),
   });
   return parseResponse<T>(res);
@@ -179,18 +198,37 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
 export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${getBaseURL()}${path}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: buildHeaders(undefined, true),
     body: JSON.stringify(body),
   });
   return parseResponse<T>(res);
 }
 
 export async function apiDelete(path: string): Promise<void> {
-  const res = await fetch(`${getBaseURL()}${path}`, { method: 'DELETE' });
+  const res = await fetch(`${getBaseURL()}${path}`, {
+    method: 'DELETE',
+    headers: buildHeaders(),
+  });
   await parseResponse<void>(res);
 }
 
 export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
-  const res = await fetch(`${getBaseURL()}${path}`, { method: 'POST', body: form });
+  const res = await fetch(`${getBaseURL()}${path}`, {
+    method: 'POST',
+    headers: buildHeaders(),
+    body: form,
+  });
   return parseResponse<T>(res);
+}
+
+export async function apiGetBlob(path: string): Promise<Blob> {
+  const res = await fetch(`${getBaseURL()}${path}`, {
+    headers: buildHeaders(),
+  });
+
+  if (!res.ok) {
+    throw await buildApiError(res);
+  }
+
+  return res.blob();
 }

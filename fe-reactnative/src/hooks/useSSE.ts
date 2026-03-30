@@ -1,3 +1,4 @@
+import { getAccessToken } from '../auth/session';
 import { getBaseURL } from '../services/api';
 
 export function useSSE(url: string, onChunk: (chunk: string) => void, onDone: (syllabusId?: string) => void) {
@@ -5,7 +6,10 @@ export function useSSE(url: string, onChunk: (chunk: string) => void, onDone: (s
     try {
       const res = await fetch(`${getBaseURL()}${url}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(getAccessToken() ? { Authorization: `Bearer ${getAccessToken()}` } : {}),
+        },
         body: JSON.stringify(body),
       });
 
