@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict
 
@@ -20,7 +21,17 @@ class LearningRecommendation(BaseModel):
 
 
 class PersonalizeRequest(BaseModel):
+    participant_name: str
     competency_gaps: list[CompetencyGap]
+
+
+class BulkParticipantRequest(BaseModel):
+    participant_name: str
+    competency_gaps: list[CompetencyGap]
+
+
+class BulkPersonalizeRequest(BaseModel):
+    participants: list[BulkParticipantRequest]
 
 
 class PersonalizeResponse(BaseModel):
@@ -28,20 +39,40 @@ class PersonalizeResponse(BaseModel):
 
     id: uuid.UUID
     syllabus_id: uuid.UUID
+    bulk_session_id: uuid.UUID | None = None
+    participant_name: str
+    revision_index: int = 0
     competency_gaps: list[CompetencyGap]
     recommendations: list[LearningRecommendation]
     created_at: datetime
 
     @classmethod
     def from_orm_coerce(cls, obj: object) -> "PersonalizeResponse":
-        raw_gaps = getattr(obj, "competency_gaps", [])
-        raw_recs = getattr(obj, "recommendations", [])
+        model = cast(Any, obj)
+        raw_gaps = model.competency_gaps or []
+        raw_recs = model.recommendations or []
         return cls.model_validate(
             {
-                "id": getattr(obj, "id"),
-                "syllabus_id": getattr(obj, "syllabus_id"),
+                "id": model.id,
+                "syllabus_id": model.syllabus_id,
+                "bulk_session_id": model.bulk_session_id,
+                "participant_name": model.participant_name,
+                "revision_index": model.revision_index,
                 "competency_gaps": [CompetencyGap(**g) for g in raw_gaps],
                 "recommendations": [LearningRecommendation(**r) for r in raw_recs],
-                "created_at": getattr(obj, "created_at"),
+                "created_at": model.created_at,
             }
         )
+
+
+class BulkPersonalizeResponse(BaseModel):
+    syllabus_id: uuid.UUID
+    bulk_session_id: uuid.UUID
+    total_participants: int
+    results: list[PersonalizeResponse]
+
+
+class BulkPersonalizationListResponse(BaseModel):
+    syllabus_id: uuid.UUID
+    total: int
+    results: list[PersonalizeResponse]
