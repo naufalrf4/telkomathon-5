@@ -45,16 +45,19 @@ async def test_generate_docx_returns_docx_bytes() -> None:
         journey={
             "pre_learning": {
                 "duration": "30 menit",
+                "method": ["Belajar mandiri berbasis materi pengantar"],
                 "description": "Persiapan konsep dasar",
                 "content": ["Belajar dasar"],
             },
             "classroom": {
                 "duration": "1 hari",
+                "method": ["Workshop studi kasus terpandu"],
                 "description": "Workshop studi kasus",
                 "content": ["Latihan kasus"],
             },
             "after_learning": {
                 "duration": "1 minggu",
+                "method": ["Implementasi mandiri dan review hasil"],
                 "description": "Implementasi rencana aksi",
                 "content": ["Rencana aksi"],
             },
@@ -83,11 +86,12 @@ async def test_generate_docx_returns_docx_bytes() -> None:
     assert "Duration" in xml
     assert "1 hari" in xml
     assert "Method" in xml
+    assert "Workshop studi kasus terpandu" in xml
     assert "Workshop studi kasus" in xml
     assert "Evaluation" in xml
     assert "Latihan kasus" in xml
     assert "1 minggu" in xml
-    assert "Implementasi rencana aksi" in xml
+    assert "Implementasi mandiri dan review hasil" in xml
     assert "{{" not in xml
     assert "$course_title" not in xml
     assert "$Technical Upskilling" not in xml

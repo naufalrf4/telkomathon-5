@@ -27,14 +27,24 @@ class ExportService:
     def __init__(self, db: Any) -> None:
         self.db: Any = db
 
-    async def generate_docx(self, syllabus_id: uuid.UUID) -> bytes:
-        syllabus = await self._get_syllabus(syllabus_id)
+    async def generate_docx(
+        self,
+        syllabus_id: uuid.UUID,
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> bytes:
+        syllabus = await self._get_syllabus(syllabus_id, owner_id=owner_id)
         return await asyncio.to_thread(self._render_docx, syllabus)
 
-    async def generate_pdf(self, syllabus_id: uuid.UUID) -> bytes:
+    async def generate_pdf(
+        self,
+        syllabus_id: uuid.UUID,
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> bytes:
         import weasyprint
 
-        syllabus = await self._get_syllabus(syllabus_id)
+        syllabus = await self._get_syllabus(syllabus_id, owner_id=owner_id)
 
         env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=True)
         template = env.get_template("syllabus.html")
@@ -55,10 +65,16 @@ class ExportService:
             raise RuntimeError("WeasyPrint returned no PDF output")
         return bytes(result_bytes)
 
-    async def _get_syllabus(self, syllabus_id: uuid.UUID) -> GeneratedSyllabus:
-        result = await self.db.execute(
-            select(GeneratedSyllabus).where(GeneratedSyllabus.id == syllabus_id)
-        )
+    async def _get_syllabus(
+        self,
+        syllabus_id: uuid.UUID,
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> GeneratedSyllabus:
+        stmt = select(GeneratedSyllabus).where(GeneratedSyllabus.id == syllabus_id)
+        if owner_id is not None:
+            stmt = stmt.where(GeneratedSyllabus.owner_id == owner_id)
+        result = await self.db.execute(stmt)
         syllabus = result.scalar_one_or_none()
         if syllabus is None:
             raise NotFoundException("Syllabus", str(syllabus_id))
@@ -363,6 +379,10 @@ class ExportService:
         parts: list[str] = []
         if duration:
             parts.append(f"Duration: {duration}")
+        methods = self._stage_methods(journey, stage_name)
+        if methods:
+            parts.append("Method:")
+            parts.extend(methods)
         if description:
             parts.append(f"Description: {description}")
         if content_lines:
@@ -381,8 +401,22 @@ class ExportService:
         return self._normalize_export_text(str(stage.get("duration", ""))) if stage else ""
 
     def _stage_method(self, journey: object, stage_name: str) -> str:
+        methods = self._stage_methods(journey, stage_name)
+        return "\n".join(methods)
+
+    def _stage_methods(self, journey: object, stage_name: str) -> list[str]:
         stage = self._stage_value(journey, stage_name)
-        return self._normalize_export_text(str(stage.get("description", ""))) if stage else ""
+        if not stage:
+            return []
+        raw_method = stage.get("method")
+        if isinstance(raw_method, list):
+            return [
+                f"- {self._normalize_export_text(str(item))}"
+                for item in raw_method
+                if isinstance(item, str) and self._normalize_export_text(str(item))
+            ]
+        normalized = self._normalize_export_text(str(raw_method or ""))
+        return [f"- {normalized}"] if normalized else []
 
     def _stage_content_list(self, journey: object, stage_name: str) -> str:
         stage = self._stage_value(journey, stage_name)

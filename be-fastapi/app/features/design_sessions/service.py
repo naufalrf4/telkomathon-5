@@ -1,3 +1,4 @@
+import re
 import uuid
 from collections.abc import Sequence
 from typing import Any, cast
@@ -26,45 +27,58 @@ from app.features.syllabus.service import SyllabusService
 
 
 def build_default_journey(topic: str) -> dict[str, object]:
+    content_outline = _build_topic_outline(topic)
     return {
         "pre_learning": {
             "duration": "60 menit",
+            "method": [
+                f"Orientasi mandiri untuk mengenali ruang lingkup {topic}.",
+                "Penelusuran materi pengantar secara bertahap.",
+                "Refleksi awal terhadap kebutuhan kerja yang terkait.",
+            ],
             "description": f"Peserta membangun konteks awal terkait {topic}.",
             "content": [
-                f"Meninjau konteks kerja yang terkait dengan {topic}.",
-                "Menyepakati fokus pembelajaran dan hasil yang diharapkan.",
+                f"Pengantar konteks dan tujuan belajar {topic}.",
+                f"Peta konsep awal: {content_outline[0]} dan {content_outline[1]}.",
             ],
         },
         "classroom": {
             "duration": "240 menit",
-            "description": f"Peserta berlatih menerapkan {topic} melalui studi kasus dan diskusi terarah.",
-            "content": [
-                f"Fasilitator memandu konsep inti {topic}.",
-                f"Peserta mempraktikkan penerapan {topic} pada studi kasus.",
-                f"Peserta melakukan refleksi dan umpan balik atas hasil latihan {topic}.",
+            "method": [
+                f"Paparan fasilitator untuk membedah konsep inti {topic}.",
+                "Demonstrasi dan walkthrough contoh kerja nyata.",
+                "Diskusi terarah serta latihan terstruktur berbasis studi kasus.",
             ],
+            "description": f"Peserta berlatih menerapkan {topic} melalui studi kasus dan diskusi terarah.",
+            "content": content_outline,
         },
         "after_learning": {
             "duration": "120 menit",
+            "method": [
+                f"Penugasan mandiri untuk mencoba penerapan {topic} di konteks kerja.",
+                "Review hasil dan umpan balik dari atasan atau fasilitator.",
+                "Refleksi tindak lanjut untuk penguatan praktik kerja.",
+            ],
             "description": f"Peserta mentransfer hasil belajar {topic} ke rencana aksi nyata.",
             "content": [
-                f"Peserta menerapkan rencana tindak lanjut {topic} di lingkungan kerja.",
-                f"Peserta melaporkan hasil penerapan {topic} kepada atasan atau fasilitator.",
+                f"Ringkasan penerapan {content_outline[-2]} pada konteks kerja.",
+                f"Tindak lanjut mandiri berdasarkan {content_outline[-1]}.",
             ],
         },
     }
 
 
 def fallback_source_summary(documents: Sequence[Document]) -> dict[str, object]:
-    key_points: list[str] = []
-
-    for document in documents:
-        key_points.append(
-            f"Dokumen {document.filename} mendukung perancangan materi {document.doc_type}."
-        )
+    focus_points = _extract_company_profile_focus(documents)
+    key_points = focus_points[:]
+    if not key_points:
+        key_points = [
+            "Perusahaan memiliki kebutuhan pembelajaran yang perlu diterjemahkan ke dalam target kemampuan kerja.",
+            "Dokumen sumber menunjukkan konteks bisnis, proses, dan istilah kerja yang relevan untuk penyusunan silabus.",
+            "Fokus pembelajaran diarahkan pada penguatan kemampuan praktis yang dibutuhkan organisasi.",
+        ]
 
     deduped_key_points = list(dict.fromkeys(key_points))[:5]
-    focus_points = deduped_key_points[:3]
     summary = _build_indonesian_company_profile_summary(focus_points)
     return {
         "summary": summary,
@@ -124,14 +138,7 @@ def normalize_elo_options(payload: dict[str, Any]) -> list[dict[str, object]]:
 
 def fallback_tlo_options(topic: str, target_level: int) -> list[dict[str, object]]:
     base = topic.strip() or "materi pelatihan"
-    level_map = {
-        1: "mengidentifikasi",
-        2: "menjelaskan",
-        3: "menerapkan",
-        4: "menganalisis",
-        5: "merancang",
-    }
-    terminal_verb = level_map.get(target_level, "menerapkan")
+    terminal_verb = _primary_tlo_verbs(target_level)[0]
     return [
         {
             "id": "tlo-1",
@@ -140,12 +147,12 @@ def fallback_tlo_options(topic: str, target_level: int) -> list[dict[str, object
         },
         {
             "id": "tlo-2",
-            "text": f"Peserta mampu menganalisis penerapan {base} untuk meningkatkan kualitas hasil kerja.",
+            "text": f"Peserta mampu {_secondary_tlo_verbs(target_level)[0]} penerapan {base} untuk meningkatkan kualitas hasil kerja.",
             "rationale": "Menekankan kemampuan analisis dan peningkatan kinerja.",
         },
         {
             "id": "tlo-3",
-            "text": f"Peserta mampu menyusun rencana implementasi {base} yang relevan dengan kebutuhan organisasi.",
+            "text": f"Peserta mampu {_secondary_tlo_verbs(target_level)[1]} langkah implementasi {base} yang relevan dengan kebutuhan organisasi.",
             "rationale": "Menekankan hasil akhir yang siap diterapkan setelah pelatihan.",
         },
     ]
@@ -171,72 +178,301 @@ def fallback_performance_options(topic: str, selected_tlo_text: str) -> list[dic
     ]
 
 
-def fallback_elo_options(topic: str, selected_performance_text: str) -> list[dict[str, object]]:
+def fallback_elo_options(
+    topic: str,
+    selected_performance_text: str,
+    *,
+    regenerate: bool = False,
+    previous_elo_texts: Sequence[str] | None = None,
+) -> list[dict[str, object]]:
+    primary_set = [
+        f"Mendefinisikan istilah dan konsep dasar {topic} yang relevan dengan konteks kerja.",
+        f"Mengidentifikasi komponen utama {topic} pada dokumen atau situasi kerja yang disediakan.",
+        f"Menjelaskan hubungan antara konsep {topic} dan kebutuhan kerja organisasi.",
+        f"Mengulang kembali langkah-langkah dasar {topic} sesuai panduan pembelajaran.",
+        f"Mendeskripsikan contoh penerapan dasar {topic} dengan bahasa yang jelas dan tepat.",
+    ]
+    alternate_set = [
+        f"Menyebutkan istilah inti {topic} yang perlu dikenali dalam konteks kerja.",
+        f"Menjelaskan fungsi komponen utama {topic} yang paling sering digunakan dalam pekerjaan.",
+        f"Menguraikan alur dasar {topic} dari input hingga keluaran yang diharapkan.",
+        f"Mengelompokkan elemen penting {topic} berdasarkan peran atau kegunaannya.",
+        f"Mencontohkan penerapan awal {topic} pada kasus kerja sederhana.",
+    ]
+    tertiary_set = [
+        f"Menjabarkan istilah utama {topic} yang menjadi fondasi pembelajaran awal.",
+        f"Membedakan peran setiap komponen dasar {topic} pada alur kerja sederhana.",
+        f"Menuturkan tahapan umum {topic} secara runtut dan mudah diikuti.",
+        f"Menghubungkan konsep dasar {topic} dengan kebutuhan kerja yang paling dekat.",
+        f"Menunjukkan contoh sederhana penggunaan awal {topic} pada pekerjaan sehari-hari.",
+    ]
+    normalized_previous = {item.strip() for item in (previous_elo_texts or []) if item.strip()}
+
+    if not regenerate:
+        selected_set = primary_set
+    else:
+        variants = [alternate_set, tertiary_set, primary_set]
+        selected_set = next(
+            (variant for variant in variants if not normalized_previous.intersection(variant)),
+            tertiary_set,
+        )
+
     return [
         {
-            "id": "elo-1",
-            "elo": f"Mendefinisikan istilah dan konsep dasar {topic} yang relevan dengan konteks kerja.",
+            "id": f"elo-{index}",
+            "elo": elo_text,
             "rationale": selected_performance_text,
-        },
-        {
-            "id": "elo-2",
-            "elo": f"Mengidentifikasi komponen utama {topic} pada dokumen atau situasi kerja yang disediakan.",
-            "rationale": selected_performance_text,
-        },
-        {
-            "id": "elo-3",
-            "elo": f"Menjelaskan hubungan antara konsep {topic} dan kebutuhan kerja organisasi.",
-            "rationale": selected_performance_text,
-        },
-        {
-            "id": "elo-4",
-            "elo": f"Mengulang kembali langkah-langkah dasar {topic} sesuai panduan pembelajaran.",
-            "rationale": selected_performance_text,
-        },
-        {
-            "id": "elo-5",
-            "elo": f"Mendeskripsikan contoh penerapan dasar {topic} dengan bahasa yang jelas dan tepat.",
-            "rationale": selected_performance_text,
-        },
+        }
+        for index, elo_text in enumerate(selected_set, start=1)
     ]
+
+
+def _build_topic_outline(topic: str) -> list[str]:
+    normalized_topic = topic.strip() or "topik pembelajaran"
+    lowered = normalized_topic.lower()
+
+    if "machine learning" in lowered or lowered == "ml" or " ml " in f" {lowered} ":
+        return [
+            "Konsep AI, Machine Learning, dan Deep Learning.",
+            "Dasar Python untuk workflow machine learning.",
+            "Library Python yang umum dipakai untuk machine learning.",
+            "Pre-processing data sebelum pemodelan.",
+            "Exploratory Data Analysis (EDA) untuk memahami dataset.",
+        ]
+
+    return [
+        f"Konsep dasar dan terminologi inti {normalized_topic}.",
+        f"Kerangka kerja, tools, atau library utama untuk {normalized_topic}.",
+        f"Alur kerja dasar dan praktik inti dalam {normalized_topic}.",
+        f"Analisis contoh kasus atau data terkait {normalized_topic}.",
+        f"Penerapan {normalized_topic} pada konteks kerja nyata.",
+    ]
+
+
+def _primary_tlo_verbs(target_level: int) -> tuple[str, ...]:
+    mapping = {
+        1: ("mengidentifikasi", "menjelaskan"),
+        2: ("menjelaskan", "menguraikan"),
+        3: ("menerapkan", "menganalisis"),
+        4: ("menganalisis", "mengevaluasi"),
+        5: ("merancang", "mengevaluasi"),
+    }
+    return mapping.get(target_level, ("menerapkan", "menganalisis"))
+
+
+def _secondary_tlo_verbs(target_level: int) -> tuple[str, str]:
+    mapping = {
+        1: ("menjelaskan", "menyusun"),
+        2: ("menerapkan dasar", "menyusun"),
+        3: ("menganalisis", "menyusun"),
+        4: ("mengevaluasi", "merumuskan"),
+        5: ("mengevaluasi", "merancang"),
+    }
+    return mapping.get(target_level, ("menganalisis", "menyusun"))
+
+
+def _allowed_tlo_verbs(target_level: int) -> tuple[str, ...]:
+    mapping = {
+        1: ("mengidentifikasi", "mengenali", "menyebutkan", "menjelaskan"),
+        2: ("menjelaskan", "menguraikan", "menafsirkan", "menerapkan dasar", "menggunakan"),
+        3: ("menerapkan", "mengolah", "menginterpretasikan", "menganalisis"),
+        4: ("menganalisis", "mengevaluasi", "memvalidasi", "mengoptimalkan"),
+        5: ("mengevaluasi", "merancang", "merumuskan", "membangun"),
+    }
+    return mapping.get(target_level, ("menerapkan", "menganalisis"))
+
+
+def _disallowed_tlo_verbs(target_level: int) -> tuple[str, ...]:
+    mapping = {
+        1: ("menganalisis", "mengevaluasi", "merancang", "membangun", "memvalidasi"),
+        2: ("mengevaluasi", "merancang", "membangun", "memvalidasi"),
+        3: ("menyebutkan", "mengenali"),
+        4: ("menyebutkan", "mengenali", "menerapkan dasar"),
+        5: ("menyebutkan", "mengenali", "menjelaskan dasar", "menerapkan dasar"),
+    }
+    return mapping.get(target_level, ())
+
+
+def matches_tlo_level(text: str, target_level: int) -> bool:
+    normalized = text.strip().lower()
+    if not normalized:
+        return False
+    allowed = _allowed_tlo_verbs(target_level)
+    disallowed = _disallowed_tlo_verbs(target_level)
+    has_allowed = any(f" {verb} " in f" {normalized} " for verb in allowed)
+    has_disallowed = any(f" {verb} " in f" {normalized} " for verb in disallowed)
+    return has_allowed and not has_disallowed
+
+
+def _extract_company_profile_focus(documents: Sequence[Document]) -> list[str]:
+    scored_points: list[tuple[int, str]] = []
+    for document in documents:
+        content = document.content_text or ""
+        if not content.strip():
+            continue
+        candidates = re.split(r"(?<=[.!?])\s+|\n+", content)
+        for raw_candidate in candidates:
+            candidate = _sanitize_focus_point(raw_candidate)
+            if candidate:
+                score = _score_focus_point(candidate)
+                if score >= 4:
+                    scored_points.append((score, candidate))
+            if len(scored_points) >= 12:
+                break
+        if len(scored_points) >= 12:
+            break
+
+    ordered = sorted(scored_points, key=lambda item: (-item[0], len(item[1])))
+    deduped: list[str] = []
+    for _, point in ordered:
+        if point not in deduped:
+            deduped.append(point)
+        if len(deduped) >= 5:
+            break
+
+    return deduped
+
+
+def _sanitize_focus_point(value: str) -> str | None:
+    cleaned = " ".join(value.replace("\r", " ").split()).strip().strip("-•* ")
+    if not cleaned:
+        return None
+    cleaned = _clean_focus_point_clauses(cleaned)
+    if not cleaned:
+        return None
+    lowered = cleaned.lower()
+    if len(cleaned) < 30:
+        return None
+    if re.search(r"\b\d{2,}([./_-]\d+)*\b", cleaned):
+        return None
+    if any(ext in lowered for ext in (".pdf", ".docx", ".pptx")):
+        return None
+    ignored_prefixes = (
+        "dokumen ",
+        "document ",
+        "table of contents",
+        "daftar isi",
+        "laporan tahunan",
+        "annual report",
+        "halaman ",
+        "page ",
+    )
+    if lowered.startswith(ignored_prefixes):
+        return None
+    if _looks_like_low_signal_profile_point(cleaned):
+        return None
+    if cleaned.isupper():
+        return None
+    return cleaned.rstrip(". ") + "."
+
+
+def _clean_focus_point_clauses(value: str) -> str:
+    clauses = [segment.strip(" .") for segment in re.split(r"[,;]", value) if segment.strip(" .")]
+    kept: list[str] = []
+    for clause in clauses:
+        if _contains_english_profile_terms(clause):
+            continue
+        if len(clause.split()) < 4:
+            continue
+        kept.append(clause)
+    if kept:
+        return ", ".join(kept)
+    return "" if _contains_english_profile_terms(value) else value
+
+
+def _score_focus_point(value: str) -> int:
+    lowered = value.lower()
+    score = 0
+    business_markers = (
+        "perusahaan",
+        "organisasi",
+        "layanan",
+        "bisnis",
+        "operasional",
+        "pelanggan",
+        "digital",
+        "kapabilitas",
+        "kompetensi",
+        "produk",
+        "strategi",
+        "transformasi",
+        "kinerja",
+        "proses",
+    )
+    for marker in business_markers:
+        if marker in lowered:
+            score += 2
+    if 50 <= len(value) <= 180:
+        score += 2
+    if lowered.endswith("."):
+        score += 1
+    if _looks_predominantly_english(value):
+        score -= 2
+    if _looks_like_low_signal_profile_point(value):
+        score -= 3
+    return score
 
 
 class DesignSessionService:
     def __init__(self, db: Any) -> None:
         self.db: Any = db
 
-    async def create_session(self, request: DesignSessionCreateRequest) -> DesignSession:
+    async def create_session(
+        self, request: DesignSessionCreateRequest, *, owner_id: uuid.UUID | None = None
+    ) -> DesignSession:
         _ = await self._get_ready_documents(request.document_ids)
-        session = DesignSession(document_ids=[str(item) for item in request.document_ids])
+        session = DesignSession(
+            document_ids=[str(item) for item in request.document_ids],
+            owner_id=owner_id,
+        )
         self.db.add(session)
         await self.db.flush()
         await self.db.refresh(session)
         self._attach_preview_fields(session)
         return session
 
-    async def list_sessions(self) -> list[DesignSession]:
-        result = await self.db.execute(
-            select(DesignSession).order_by(
-                DesignSession.updated_at.desc(),
-                DesignSession.created_at.desc(),
-            )
+    async def list_sessions(self, *, owner_id: uuid.UUID | None = None) -> list[DesignSession]:
+        query = select(DesignSession)
+        if owner_id is not None:
+            query = query.where(DesignSession.owner_id == owner_id)
+        query = query.order_by(
+            DesignSession.updated_at.desc(),
+            DesignSession.created_at.desc(),
         )
+        result = await self.db.execute(query)
         sessions = result.scalars().all()
         valid_sessions = [session for session in sessions if isinstance(session, DesignSession)]
         for session in valid_sessions:
             self._attach_preview_fields(session)
         return valid_sessions
 
-    async def get_session(self, session_id: uuid.UUID) -> DesignSession:
-        result = await self.db.execute(select(DesignSession).where(DesignSession.id == session_id))
+    async def get_session(
+        self,
+        session_id: uuid.UUID,
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> DesignSession:
+        query = select(DesignSession).where(DesignSession.id == session_id)
+        if owner_id is not None:
+            query = query.where(DesignSession.owner_id == owner_id)
+        result = await self.db.execute(query)
         session = result.scalar_one_or_none()
         if not isinstance(session, DesignSession):
             raise NotFoundException("Design session", str(session_id))
         self._attach_preview_fields(session)
         return session
 
-    async def start_assist(self, session_id: uuid.UUID) -> DesignSession:
-        session = await self.get_session(session_id)
+    async def start_assist(
+        self,
+        session_id: uuid.UUID,
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> DesignSession:
+        session = (
+            await self.get_session(session_id)
+            if owner_id is None
+            else await self.get_session(session_id, owner_id=owner_id)
+        )
         self._ensure_not_finalized(session)
         documents = await self._get_ready_documents(self._document_ids_from_session(session))
         session.source_summary = await self._generate_source_summary(documents)
@@ -251,8 +487,14 @@ class DesignSessionService:
         self,
         session_id: uuid.UUID,
         request: CourseContextRequest,
+        *,
+        owner_id: uuid.UUID | None = None,
     ) -> DesignSession:
-        session = await self.get_session(session_id)
+        session = (
+            await self.get_session(session_id)
+            if owner_id is None
+            else await self.get_session(session_id, owner_id=owner_id)
+        )
         self._ensure_not_finalized(session)
         if not session.source_summary:
             raise InvalidStepException("start-assist must be completed before course-context")
@@ -264,8 +506,17 @@ class DesignSessionService:
         self._attach_preview_fields(session)
         return session
 
-    async def generate_tlo_options(self, session_id: uuid.UUID) -> DesignSession:
-        session = await self.get_session(session_id)
+    async def generate_tlo_options(
+        self,
+        session_id: uuid.UUID,
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> DesignSession:
+        session = (
+            await self.get_session(session_id)
+            if owner_id is None
+            else await self.get_session(session_id, owner_id=owner_id)
+        )
         self._ensure_not_finalized(session)
         course_context = self._require_course_context(session)
         source_summary = self._require_source_summary(session)
@@ -279,8 +530,18 @@ class DesignSessionService:
         self._attach_preview_fields(session)
         return session
 
-    async def select_tlo(self, session_id: uuid.UUID, option_id: str) -> DesignSession:
-        session = await self.get_session(session_id)
+    async def select_tlo(
+        self,
+        session_id: uuid.UUID,
+        option_id: str,
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> DesignSession:
+        session = (
+            await self.get_session(session_id)
+            if owner_id is None
+            else await self.get_session(session_id, owner_id=owner_id)
+        )
         self._ensure_not_finalized(session)
         session.selected_tlo = self._find_option(session.tlo_options, option_id, "TLO option")
         self._reset_after_tlo_selection(session)
@@ -290,8 +551,17 @@ class DesignSessionService:
         self._attach_preview_fields(session)
         return session
 
-    async def generate_performance_options(self, session_id: uuid.UUID) -> DesignSession:
-        session = await self.get_session(session_id)
+    async def generate_performance_options(
+        self,
+        session_id: uuid.UUID,
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> DesignSession:
+        session = (
+            await self.get_session(session_id)
+            if owner_id is None
+            else await self.get_session(session_id, owner_id=owner_id)
+        )
         self._ensure_not_finalized(session)
         course_context = self._require_course_context(session)
         source_summary = self._require_source_summary(session)
@@ -310,8 +580,18 @@ class DesignSessionService:
         self._attach_preview_fields(session)
         return session
 
-    async def select_performance(self, session_id: uuid.UUID, option_id: str) -> DesignSession:
-        session = await self.get_session(session_id)
+    async def select_performance(
+        self,
+        session_id: uuid.UUID,
+        option_id: str,
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> DesignSession:
+        session = (
+            await self.get_session(session_id)
+            if owner_id is None
+            else await self.get_session(session_id, owner_id=owner_id)
+        )
         self._ensure_not_finalized(session)
         session.selected_performance = self._find_option(
             session.performance_options,
@@ -325,18 +605,33 @@ class DesignSessionService:
         self._attach_preview_fields(session)
         return session
 
-    async def generate_elo_options(self, session_id: uuid.UUID) -> DesignSession:
-        session = await self.get_session(session_id)
+    async def generate_elo_options(
+        self,
+        session_id: uuid.UUID,
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> DesignSession:
+        session = (
+            await self.get_session(session_id)
+            if owner_id is None
+            else await self.get_session(session_id, owner_id=owner_id)
+        )
         self._ensure_not_finalized(session)
         course_context = self._require_course_context(session)
         source_summary = self._require_source_summary(session)
         selected_tlo = self._require_selected_tlo(session)
         selected_performance = self._require_selected_performance(session)
+        previous_elo_texts = [
+            str(option.get("elo", "")).strip()
+            for option in session.elo_options
+            if isinstance(option, dict) and str(option.get("elo", "")).strip()
+        ]
         options = await self._generate_elo_options(
             source_summary,
             course_context,
             selected_tlo,
             selected_performance,
+            previous_elo_texts,
         )
         session.elo_options = options
         session.selected_elos = []
@@ -346,8 +641,18 @@ class DesignSessionService:
         self._attach_preview_fields(session)
         return session
 
-    async def select_elos(self, session_id: uuid.UUID, option_ids: list[str]) -> DesignSession:
-        session = await self.get_session(session_id)
+    async def select_elos(
+        self,
+        session_id: uuid.UUID,
+        option_ids: list[str],
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> DesignSession:
+        session = (
+            await self.get_session(session_id)
+            if owner_id is None
+            else await self.get_session(session_id, owner_id=owner_id)
+        )
         self._ensure_not_finalized(session)
         if not session.elo_options:
             raise InvalidStepException("elo-options must be generated before elo-selection")
@@ -363,8 +668,17 @@ class DesignSessionService:
         self._attach_preview_fields(session)
         return session
 
-    async def finalize(self, session_id: uuid.UUID) -> tuple[DesignSession, GeneratedSyllabus]:
-        session = await self.get_session(session_id)
+    async def finalize(
+        self,
+        session_id: uuid.UUID,
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> tuple[DesignSession, GeneratedSyllabus]:
+        session = (
+            await self.get_session(session_id)
+            if owner_id is None
+            else await self.get_session(session_id, owner_id=owner_id)
+        )
         self._ensure_not_finalized(session)
         course_context = self._require_course_context(session)
         source_summary = self._require_source_summary(session)
@@ -387,6 +701,7 @@ class DesignSessionService:
             standard_result=self._build_standard_result(session.selected_elos),
             elos=self._serialize_selected_elos(session.selected_elos),
             source_doc_ids=list(session.document_ids),
+            owner_id=session.owner_id,
         )
 
         session.finalized_syllabus_id = syllabus.id
@@ -550,6 +865,9 @@ class DesignSessionService:
         if not combined:
             return _build_indonesian_company_profile_summary(focus_points)
 
+        if _looks_like_document_reference_summary(combined):
+            return _build_indonesian_company_profile_summary(focus_points)
+
         if _looks_predominantly_english(combined):
             return _build_indonesian_company_profile_summary(focus_points)
 
@@ -637,6 +955,7 @@ class DesignSessionService:
 
     async def _generate_source_summary(self, documents: Sequence[Document]) -> dict[str, object]:
         fallback = fallback_source_summary(documents)
+        fallback_focus = _extract_company_profile_focus(documents)
         document_context = "\n\n".join(
             f"File: {document.filename}\nType: {document.doc_type}\nContent:\n{document.content_text[:2400]}"
             for document in documents
@@ -668,14 +987,27 @@ class DesignSessionService:
             if isinstance(company_profile_focus, list)
             else []
         )
+        normalized_focus = [
+            point for point in normalized_focus if not _looks_like_document_reference_summary(point)
+        ]
+        if not normalized_focus:
+            normalized_focus = fallback_focus[:3]
         normalized_summary = self._normalize_company_profile_summary(
             summary.strip(),
-            normalized_focus[:5] or normalized_key_points[:3],
+            normalized_focus[:5] or fallback_focus[:3] or normalized_key_points[:3],
         )
+        if (
+            normalized_summary
+            == "Perusahaan memiliki konteks bisnis dan kebutuhan pembelajaran yang menjadi dasar penyusunan silabus."
+            and fallback_focus
+        ):
+            normalized_summary = _build_indonesian_company_profile_summary(fallback_focus[:3])
         return {
             "summary": normalized_summary or fallback["summary"],
-            "key_points": normalized_key_points[:5],
-            "company_profile_focus": normalized_focus[:5] or normalized_key_points[:3],
+            "key_points": (normalized_key_points[:5] or fallback["key_points"]),
+            "company_profile_focus": normalized_focus[:5]
+            or fallback_focus[:3]
+            or fallback["company_profile_focus"],
         }
 
     async def _generate_tlo_options(
@@ -699,7 +1031,12 @@ class DesignSessionService:
             return fallback
 
         options = normalize_text_options(payload, "tlo")
-        return options or fallback
+        valid_options = [
+            option
+            for option in options
+            if matches_tlo_level(str(option.get("text", "")), target_level)
+        ]
+        return valid_options or fallback
 
     async def _generate_performance_options(
         self,
@@ -731,10 +1068,17 @@ class DesignSessionService:
         course_context: dict[str, object],
         selected_tlo: dict[str, object],
         selected_performance: dict[str, object],
+        previous_elo_texts: Sequence[str] | None = None,
     ) -> list[dict[str, object]]:
         topic = self._course_topic(course_context)
         selected_performance_text = str(selected_performance["text"])
-        fallback = fallback_elo_options(topic, selected_performance_text)
+        normalized_previous = [item.strip() for item in (previous_elo_texts or []) if item.strip()]
+        fallback = fallback_elo_options(
+            topic,
+            selected_performance_text,
+            regenerate=bool(normalized_previous),
+            previous_elo_texts=normalized_previous,
+        )
         try:
             payload = await chat_complete_json(
                 build_elo_options_prompt(
@@ -743,12 +1087,19 @@ class DesignSessionService:
                     target_level=self._course_target_level(course_context),
                     selected_tlo=str(selected_tlo["text"]),
                     selected_performance=selected_performance_text,
+                    previous_elos=normalized_previous,
                 )
             )
         except AIServiceException:
             return fallback
 
         options = normalize_elo_options(payload)
+        if normalized_previous:
+            options = [
+                option
+                for option in options
+                if str(option.get("elo", "")).strip() not in normalized_previous
+            ]
         return options or fallback
 
 
@@ -770,6 +1121,58 @@ def _looks_predominantly_english(value: str) -> bool:
     return sum(1 for marker in english_markers if marker in lowered) >= 2
 
 
+def _contains_english_profile_terms(value: str) -> bool:
+    lowered = f" {value.lower()} "
+    english_markers = (
+        " the ",
+        " and ",
+        " with ",
+        " company ",
+        " business ",
+        " organization ",
+        " profile ",
+        " context ",
+        " reliable ",
+        " services ",
+        " performance ",
+        " transformation ",
+        " growth ",
+        " industrial ",
+        " catalyst ",
+        " through ",
+        " not only ",
+    )
+    return any(marker in lowered for marker in english_markers)
+
+
+def _looks_like_document_reference_summary(value: str) -> bool:
+    lowered = value.lower()
+    if any(ext in lowered for ext in (".pdf", ".docx", ".pptx")):
+        return True
+    generic_markers = (
+        "dokumen ",
+        "document ",
+        "mendukung perancangan materi",
+        "supports the design of learning materials",
+    )
+    return any(marker in lowered for marker in generic_markers)
+
+
+def _looks_like_low_signal_profile_point(value: str) -> bool:
+    lowered = value.lower()
+    low_signal_markers = (
+        "transformasi berkelanjutan bagi negeri",
+        "enhancing connectivity",
+        "catalyzing sustainable transformation",
+        "committed to being",
+        "katalisator utama",
+        "meningkatkan konektivitas",
+        "annual report",
+        "laporan tahunan",
+    )
+    return any(marker in lowered for marker in low_signal_markers)
+
+
 def _capitalize_sentences(sentences: Sequence[str]) -> str:
     normalized_sentences: list[str] = []
     for sentence in sentences:
@@ -782,7 +1185,9 @@ def _capitalize_sentences(sentences: Sequence[str]) -> str:
 
 def _build_indonesian_company_profile_summary(focus_points: Sequence[str]) -> str:
     cleaned_points = [
-        " ".join(point.split()).strip().rstrip(".") for point in focus_points if point.strip()
+        " ".join(point.split()).strip().rstrip(".")
+        for point in focus_points
+        if point.strip() and not _looks_like_document_reference_summary(point)
     ]
     if not cleaned_points:
         return "Perusahaan memiliki konteks bisnis dan kebutuhan pembelajaran yang menjadi dasar penyusunan silabus."

@@ -11,11 +11,13 @@ def build_personalize_prompt(
     syllabus_context: dict[str, object],
     competency_gaps: list[dict[str, object]],
     available_content: str,
+    participant_name: str,
 ) -> list[ChatCompletionMessageParam]:
     import json
 
     user_content = (
         f"Analyze the following competency gaps and recommend micro-learning modules.\n\n"
+        f"Participant Name:\n{participant_name}\n\n"
         f"Syllabus Context:\n{json.dumps(syllabus_context, indent=2)}\n\n"
         f"Competency Gaps:\n{json.dumps(competency_gaps, indent=2)}\n\n"
         f"Available Reference Content:\n{available_content}\n\n"

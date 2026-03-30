@@ -40,13 +40,22 @@ def build_tlo_options_prompt(
         4: "advanced (Analyze/Evaluate)",
         5: "expert (Evaluate/Create)",
     }.get(target_level, "intermediate (Apply/Analyze)")
+    verb_guidance = {
+        1: "Gunakan verba dasar seperti mengidentifikasi, mengenali, menyebutkan, atau menjelaskan dasar. Jangan memakai verba tingkat tinggi seperti menganalisis, mengevaluasi, atau merancang.",
+        2: "Gunakan verba seperti menjelaskan, menguraikan, menafsirkan, atau menerapkan dasar. Hindari verba expert seperti mengevaluasi atau merancang.",
+        3: "Gunakan verba seperti menerapkan, mengolah, menginterpretasikan, atau menganalisis. Hindari verba terlalu dasar seperti hanya menyebutkan.",
+        4: "Gunakan verba seperti menganalisis, mengevaluasi, memvalidasi, atau mengoptimalkan. Hindari verba entry-level seperti mengidentifikasi atau menyebutkan.",
+        5: "Gunakan verba seperti mengevaluasi strategis, merancang, merumuskan, atau membangun pendekatan baru. Hindari verba entry-level atau sekadar operasional dasar.",
+    }.get(target_level, "Pastikan verba sesuai tier kompetensi yang diminta.")
     return [
         {
             "role": "system",
             "content": (
                 "You are an expert curriculum designer. Return valid JSON only with key "
                 "'options' as an array of objects containing 'text' and 'rationale'. "
-                "Use Indonesian Bloom-aligned verbs and ensure each option matches the requested expertise tier."
+                "Use Indonesian Bloom-aligned verbs and ensure each option matches the requested expertise tier. "
+                "Every TLO must be measurable, terminal, job-relevant, and written in one sentence. "
+                "Do not use generic verbs like memahami or mengetahui."
             ),
         },
         {
@@ -55,10 +64,12 @@ def build_tlo_options_prompt(
                 "Create 3 terminal learning objective options in Bahasa Indonesia. "
                 "Each option must fit the target level, source summary, and company profile. "
                 "TLO must describe terminal capability, not assessment criteria. "
+                "Paksa pemilihan verba sesuai level Bloom yang tepat dan jangan membuat TLO terlalu generik atau abstrak. "
                 'Return JSON: {"options": [{"text": string, "rationale": string}]}\n\n'
                 f"Topic: {topic}\n"
                 f"Target level: {target_level}\n"
                 f"Expertise tier: {expertise_level}\n"
+                f"Verb guidance: {verb_guidance}\n"
                 f"Additional context: {additional_context or '-'}\n"
                 f"Source summary: {summary}"
             ),
@@ -112,6 +123,7 @@ def build_elo_options_prompt(
     target_level: int,
     selected_tlo: str,
     selected_performance: str,
+    previous_elos: list[str] | None = None,
 ) -> list[ChatCompletionMessageParam]:
     expertise_level = {
         1: "foundational (Remember/Understand)",
@@ -147,7 +159,9 @@ def build_elo_options_prompt(
                 f"Expertise tier: {expertise_level}\n"
                 f"Source summary: {source_summary}\n"
                 f"Selected TLO: {selected_tlo}\n"
-                f"Selected performance objective: {selected_performance}"
+                f"Selected performance objective: {selected_performance}\n"
+                f"Previous ELO options to avoid repeating: {previous_elos or ['-']}\n"
+                "When the learning journey or downstream module/content outline is inferred, prefer concrete topic bullets rather than generic activity sentences."
             ),
         },
     ]

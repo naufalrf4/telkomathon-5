@@ -10,8 +10,11 @@ from app.features.design_sessions.schemas import CourseContextRequest
 from app.features.design_sessions.service import (
     DesignSessionService,
     fallback_elo_options,
+    fallback_source_summary,
+    fallback_tlo_options,
     normalize_text_options,
 )
+from app.features.documents.models import Document
 from app.features.syllabus.models import GeneratedSyllabus
 
 
@@ -199,6 +202,83 @@ async def test_select_performance_resets_elo_state(monkeypatch: pytest.MonkeyPat
 
 
 @pytest.mark.asyncio
+async def test_generate_elo_options_passes_previous_options_for_regeneration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = FakeAsyncSession()
+    service = DesignSessionService(db)
+    session = DesignSession(
+        document_ids=[str(uuid4())],
+        wizard_step="elo_options_ready",
+        source_summary={"summary": "Ringkasan", "key_points": ["Poin 1"]},
+        course_context={
+            "topic": "Machine Learning Level 1",
+            "target_level": 1,
+            "additional_context": "Ops",
+        },
+        selected_tlo={"id": "tlo-1", "text": "TLO 1", "rationale": "ok"},
+        selected_performance={"id": "performance-1", "text": "Perf 1", "rationale": "ok"},
+        elo_options=[
+            {"id": "elo-1", "elo": "Mendefinisikan konsep dasar.", "rationale": "ok"},
+            {"id": "elo-2", "elo": "Mengidentifikasi komponen utama.", "rationale": "ok"},
+        ],
+    )
+
+    async def fake_get_session(_: object) -> DesignSession:
+        return session
+
+    captured_previous: list[str] = []
+
+    async def fake_generate(
+        source_summary: dict[str, object],
+        course_context: dict[str, object],
+        selected_tlo: dict[str, object],
+        selected_performance: dict[str, object],
+        previous_elo_texts: list[str],
+    ) -> list[dict[str, object]]:
+        _ = source_summary, course_context, selected_tlo, selected_performance
+        captured_previous.extend(previous_elo_texts)
+        return [{"id": "elo-9", "elo": "Menyebutkan istilah inti.", "rationale": "baru"}]
+
+    monkeypatch.setattr(service, "get_session", fake_get_session)
+    monkeypatch.setattr(service, "_generate_elo_options", fake_generate)
+
+    result = await service.generate_elo_options(uuid4())
+
+    assert captured_previous == [
+        "Mendefinisikan konsep dasar.",
+        "Mengidentifikasi komponen utama.",
+    ]
+    assert result.elo_options == [
+        {"id": "elo-9", "elo": "Menyebutkan istilah inti.", "rationale": "baru"}
+    ]
+
+
+def test_fallback_elo_options_support_regeneration_variant() -> None:
+    initial = fallback_elo_options("Machine Learning Level 1", "Performance")
+    regenerated = fallback_elo_options(
+        "Machine Learning Level 1",
+        "Performance",
+        regenerate=True,
+        previous_elo_texts=[item["elo"] for item in initial],
+    )
+    regenerated_again = fallback_elo_options(
+        "Machine Learning Level 1",
+        "Performance",
+        regenerate=True,
+        previous_elo_texts=[item["elo"] for item in regenerated],
+    )
+
+    assert len(initial) == 5
+    assert len(regenerated) == 5
+    assert len(regenerated_again) == 5
+    assert initial[0]["elo"] != regenerated[0]["elo"]
+    assert regenerated[0]["elo"].startswith("Menyebutkan")
+    assert regenerated_again[0]["elo"] != regenerated[0]["elo"]
+    assert regenerated_again[0]["elo"].startswith("Menjabarkan")
+
+
+@pytest.mark.asyncio
 async def test_update_course_context_rejects_finalized_session(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -336,3 +416,37 @@ def test_fallback_elo_options_return_multiple_entries() -> None:
         elo = cast(str, item.get("elo"))
         assert isinstance(elo, str)
         assert elo
+
+
+def test_fallback_source_summary_avoids_filename_only_focus() -> None:
+    document = Document(
+        filename="06f01a7683_0259dcdfc3.pdf",
+        doc_type="company-profile",
+        file_format="pdf",
+        file_path="/tmp/company.pdf",
+        content_text=(
+            "Perusahaan menyediakan layanan konektivitas digital untuk pelanggan enterprise di berbagai wilayah. "
+            "Fokus strategis tahun berjalan mencakup transformasi layanan digital dan peningkatan kapabilitas talenta organisasi. "
+            "Program pembelajaran diarahkan untuk memperkuat literasi data dan pengambilan keputusan berbasis operasional."
+        ),
+    )
+
+    result = fallback_source_summary([document])
+
+    summary = cast(str, result["summary"])
+    assert "06f01a7683_0259dcdfc3.pdf" not in summary
+    assert any(
+        "transformasi layanan digital" in point.lower()
+        for point in cast(list[str], result["company_profile_focus"])
+    )
+
+
+def test_fallback_tlo_options_follow_level_family() -> None:
+    level_one = fallback_tlo_options("Machine Learning", 1)
+    level_four = fallback_tlo_options("Machine Learning", 4)
+
+    first_text = cast(str, level_one[0]["text"])
+    second_level_four_text = cast(str, level_four[1]["text"])
+
+    assert first_text.startswith("Peserta mampu mengidentifikasi")
+    assert "mengevaluasi" in second_level_four_text.lower()

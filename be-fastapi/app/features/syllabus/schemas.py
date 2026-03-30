@@ -25,6 +25,7 @@ class ELO(BaseModel):
 
 class LearningJourneyStage(BaseModel):
     duration: str = ""
+    method: list[str] = Field(default_factory=list)
     description: str = ""
     content: list[str] = Field(default_factory=list)
 
@@ -167,6 +168,9 @@ def _coerce_stage(value: object) -> dict[str, object]:
         content = value.get("content")
         return {
             "duration": str(value.get("duration", "")),
+            "method": [str(item) for item in value.get("method", []) if isinstance(item, str)]
+            if isinstance(value.get("method"), list)
+            else ([str(value.get("method", ""))] if str(value.get("method", "")).strip() else []),
             "description": str(value.get("description", "")),
             "content": [str(item) for item in content if isinstance(item, str)]
             if isinstance(content, list)
@@ -177,11 +181,12 @@ def _coerce_stage(value: object) -> dict[str, object]:
         normalized = [str(item) for item in value if isinstance(item, str)]
         return {
             "duration": "",
+            "method": [normalized[0]] if normalized else [],
             "description": normalized[0] if normalized else "",
             "content": normalized,
         }
 
-    return {"duration": "", "description": "", "content": []}
+    return {"duration": "", "method": [], "description": "", "content": []}
 
 
 def _course_expertise_level(target_level: int) -> str:

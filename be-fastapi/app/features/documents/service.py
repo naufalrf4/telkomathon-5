@@ -21,13 +21,20 @@ from app.utils.file_parser import parse_file
 _ALLOWED_FORMATS = {"pdf", "docx", "pptx"}
 _ZERO_EMBEDDING = [0.0] * settings.EMBEDDING_DIMENSIONS
 _MAX_UPLOAD_BYTES = settings.MAX_UPLOAD_MB * 1024 * 1024
+_MAX_DOCUMENT_TEXT_CHARS = settings.MAX_DOCUMENT_TEXT_CHARS
 
 
 class DocumentService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    async def upload_document(self, file: UploadFile, doc_type: str) -> Document:
+    async def upload_document(
+        self,
+        file: UploadFile,
+        doc_type: str,
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> Document:
         filename = file.filename or "upload"
         file_ext = Path(filename).suffix.lower().lstrip(".")
         if file_ext not in _ALLOWED_FORMATS:
@@ -49,6 +56,7 @@ class DocumentService:
             file_format=file_ext,
             file_path=str(file_path),
             status="processing",
+            owner_id=owner_id,
         )
         self.db.add(doc)
         await self.db.flush()
@@ -58,6 +66,13 @@ class DocumentService:
         except Exception as exc:
             doc.status = "failed"
             raise FileParseException("Failed to parse document") from exc
+
+        original_text_length = len(content_text)
+        if original_text_length > _MAX_DOCUMENT_TEXT_CHARS:
+            content_text = content_text[:_MAX_DOCUMENT_TEXT_CHARS]
+            metadata["text_truncated"] = True
+        metadata["stored_text_length"] = len(content_text)
+        metadata["original_text_length"] = original_text_length
 
         doc.content_text = content_text
         doc.metadata_ = metadata
@@ -97,27 +112,37 @@ class DocumentService:
         await self.db.refresh(doc, ["chunks"])
         return doc
 
-    async def get_documents(self) -> list[Document]:
-        result = await self.db.execute(
-            select(Document)
-            .options(selectinload(Document.chunks))
-            .order_by(Document.upload_date.desc())
-        )
+    async def get_documents(self, *, owner_id: uuid.UUID | None = None) -> list[Document]:
+        query = select(Document).options(selectinload(Document.chunks))
+        if owner_id is not None:
+            query = query.where(Document.owner_id == owner_id)
+        query = query.order_by(Document.upload_date.desc())
+        result = await self.db.execute(query)
         return list(result.scalars().all())
 
-    async def get_document(self, document_id: uuid.UUID) -> Document:
-        result = await self.db.execute(
+    async def get_document(
+        self,
+        document_id: uuid.UUID,
+        *,
+        owner_id: uuid.UUID | None = None,
+    ) -> Document:
+        query = (
             select(Document)
             .options(selectinload(Document.chunks))
             .where(Document.id == document_id)
         )
+        if owner_id is not None:
+            query = query.where(Document.owner_id == owner_id)
+        result = await self.db.execute(query)
         doc = result.scalar_one_or_none()
         if doc is None:
             raise NotFoundException("Document", str(document_id))
         return doc
 
-    async def delete_document(self, document_id: uuid.UUID) -> None:
-        doc = await self.get_document(document_id)
+    async def delete_document(
+        self, document_id: uuid.UUID, *, owner_id: uuid.UUID | None = None
+    ) -> None:
+        doc = await self.get_document(document_id, owner_id=owner_id)
         file_path = Path(doc.file_path)
         await self.db.delete(doc)
         await self.db.flush()

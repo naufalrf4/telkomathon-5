@@ -4,6 +4,7 @@ from uuid import uuid4
 import pytest
 
 from app.features.chat.models import ChatMessage
+from app.features.history.models import OwnerHistory
 from app.features.syllabus.models import GeneratedSyllabus
 from app.features.syllabus.schemas import (
     ELO,
@@ -26,6 +27,7 @@ class FakeRevisionSession:
     def __init__(self, syllabus: GeneratedSyllabus, message: ChatMessage | None) -> None:
         self.syllabus: GeneratedSyllabus = syllabus
         self.message: ChatMessage | None = message
+        self.added: list[object] = []
 
     async def execute(self, statement: object) -> FakeScalarResult:
         statement_text = str(statement)
@@ -34,6 +36,7 @@ class FakeRevisionSession:
         return FakeScalarResult(self.syllabus)
 
     def add(self, _obj: object) -> None:
+        self.added.append(_obj)
         return None
 
     async def flush(self) -> None:
@@ -64,16 +67,19 @@ async def test_apply_revision_updates_history_and_marks_chat_message() -> None:
         journey={
             "pre_learning": {
                 "duration": "30 menit",
+                "method": "Metode pre lama",
                 "description": "Pre lama",
                 "content": ["Pre lama"],
             },
             "classroom": {
                 "duration": "1 hari",
+                "method": "Metode class lama",
                 "description": "Class lama",
                 "content": ["Class lama"],
             },
             "after_learning": {
                 "duration": "1 minggu",
+                "method": "Metode after lama",
                 "description": "After lama",
                 "content": ["After lama"],
             },
@@ -105,13 +111,22 @@ async def test_apply_revision_updates_history_and_marks_chat_message() -> None:
             elos=[ELO(elo="ELO baru")],
             journey=LearningJourney(
                 pre_learning=LearningJourneyStage(
-                    duration="45 menit", description="Pre baru", content=["Pre baru"]
+                    duration="45 menit",
+                    method=["Metode pre baru"],
+                    description="Pre baru",
+                    content=["Pre baru"],
                 ),
                 classroom=LearningJourneyStage(
-                    duration="2 hari", description="Class baru", content=["Class baru"]
+                    duration="2 hari",
+                    method=["Metode class baru"],
+                    description="Class baru",
+                    content=["Class baru"],
                 ),
                 after_learning=LearningJourneyStage(
-                    duration="2 minggu", description="After baru", content=["After baru"]
+                    duration="2 minggu",
+                    method=["Metode after baru"],
+                    description="After baru",
+                    content=["After baru"],
                 ),
             ),
             reason="Menyesuaikan kebutuhan user",
@@ -127,12 +142,19 @@ async def test_apply_revision_updates_history_and_marks_chat_message() -> None:
     assert result.journey == {
         "pre_learning": {
             "duration": "45 menit",
+            "method": ["Metode pre baru"],
             "description": "Pre baru",
             "content": ["Pre baru"],
         },
-        "classroom": {"duration": "2 hari", "description": "Class baru", "content": ["Class baru"]},
+        "classroom": {
+            "duration": "2 hari",
+            "method": ["Metode class baru"],
+            "description": "Class baru",
+            "content": ["Class baru"],
+        },
         "after_learning": {
             "duration": "2 minggu",
+            "method": ["Metode after baru"],
             "description": "After baru",
             "content": ["After baru"],
         },
@@ -153,3 +175,7 @@ async def test_apply_revision_updates_history_and_marks_chat_message() -> None:
     ]
     assert message.revision_applied is not None
     assert message.revision_applied["summary"] == "Memperjelas TLO"
+    owner_history_rows = [obj for obj in service.db.added if isinstance(obj, OwnerHistory)]
+    assert len(owner_history_rows) == 1
+    assert owner_history_rows[0].action == "revised"
+    assert owner_history_rows[0].revision_index == 1

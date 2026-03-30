@@ -123,3 +123,41 @@ async def test_upload_document_rejects_file_over_limit() -> None:
             cast(Any, FakeUploadFile("oversize.docx", b"x" * (100 * 1024 * 1024 + 1))),
             doc_type="company-profile",
         )
+
+
+@pytest.mark.asyncio
+async def test_upload_document_truncates_large_parsed_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_session = FakeDocumentSession()
+    service = DocumentService(cast(Any, fake_session))
+
+    monkeypatch.setattr("app.features.documents.service.Document", FakeDocumentRecord)
+    monkeypatch.setattr("app.features.documents.service.DocumentChunk", FakeDocumentChunkRecord)
+    monkeypatch.setattr(
+        "app.features.documents.service.settings.UPLOAD_DIR", "./tests-temp-uploads"
+    )
+    monkeypatch.setattr("app.features.documents.service.settings.MAX_DOCUMENT_TEXT_CHARS", 20)
+    monkeypatch.setattr("app.features.documents.service._MAX_DOCUMENT_TEXT_CHARS", 20)
+    monkeypatch.setattr(
+        "app.features.documents.service.parse_file",
+        AsyncMock(return_value=("x" * 50, {"source": "test"})),
+    )
+    monkeypatch.setattr(
+        "app.features.documents.service.chunk_text",
+        lambda text: [{"text": text, "metadata": {"section": "Body", "page_number": 1}}],
+    )
+    monkeypatch.setattr(
+        "app.features.documents.service.generate_embeddings_batch",
+        AsyncMock(return_value=[[0.1] * 3072]),
+    )
+
+    uploaded = await service.upload_document(
+        cast(Any, FakeUploadFile("large.docx", b"hello world")),
+        doc_type="company-profile",
+    )
+
+    assert len(uploaded.content_text) == 20
+    assert uploaded.metadata_["text_truncated"] is True
+    assert uploaded.metadata_["original_text_length"] == 50
+    assert uploaded.metadata_["stored_text_length"] == 20

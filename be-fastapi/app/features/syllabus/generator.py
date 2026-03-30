@@ -97,27 +97,42 @@ def _build_fallback_syllabus_json(
         "journey": {
             "pre_learning": {
                 "duration": "60 menit",
+                "method": [
+                    "Belajar mandiri untuk mengenali ruang lingkup topik.",
+                    "Penelusuran materi pengantar secara bertahap.",
+                    "Refleksi awal terhadap konteks kerja peserta.",
+                ],
                 "description": f"Peserta menyiapkan konteks awal dan kosa kata utama terkait {topic}.",
                 "content": [
-                    f"Mempelajari pengantar singkat mengenai {topic}.",
-                    "Mengidentifikasi tantangan kerja yang ingin diselesaikan melalui pembelajaran ini.",
+                    f"Konsep dasar dan terminologi inti {topic}.",
+                    f"Gambaran awal konteks penerapan {topic}.",
                 ],
             },
             "classroom": {
                 "duration": "240 menit",
+                "method": [
+                    "Paparan fasilitator untuk membedah konsep inti.",
+                    "Demonstrasi dan walkthrough contoh kerja nyata.",
+                    "Diskusi terarah serta latihan terstruktur berbasis studi kasus.",
+                ],
                 "description": f"Peserta berlatih menerapkan {topic} melalui diskusi, studi kasus, dan umpan balik terarah.",
                 "content": [
-                    f"Diskusi terarah mengenai konsep inti dan praktik {topic}.",
-                    "Latihan studi kasus dan umpan balik fasilitator.",
-                    "Refleksi kelompok untuk menyepakati langkah implementasi pascapelatihan.",
+                    f"Konsep utama dan ruang lingkup {topic}.",
+                    f"Tools, library, atau komponen dasar untuk {topic}.",
+                    f"Workflow dasar dan contoh penerapan {topic}.",
                 ],
             },
             "after_learning": {
                 "duration": "120 menit",
+                "method": [
+                    "Penugasan mandiri untuk menerapkan hasil belajar di pekerjaan.",
+                    "Review hasil dan umpan balik dari atasan atau fasilitator.",
+                    "Refleksi tindak lanjut untuk penguatan praktik kerja.",
+                ],
                 "description": f"Peserta menerjemahkan hasil belajar {topic} menjadi aksi kerja nyata.",
                 "content": [
-                    f"Menjalankan rencana aksi penerapan {topic} di pekerjaan.",
-                    "Mengevaluasi hasil awal bersama atasan atau mentor kerja.",
+                    f"Ringkasan penerapan dasar {topic} di pekerjaan.",
+                    "Tindak lanjut dan penguatan materi setelah sesi kelas.",
                 ],
             },
         },
