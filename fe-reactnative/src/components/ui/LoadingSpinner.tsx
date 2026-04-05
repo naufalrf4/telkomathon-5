@@ -9,16 +9,16 @@ interface LoadingSpinnerProps {
 export function LoadingSpinner({ fullScreen = false, message }: LoadingSpinnerProps) {
   if (fullScreen) {
     return (
-      <View className="flex-1 justify-center items-center bg-white/80 absolute inset-0 z-50">
+      <View className="absolute inset-0 z-50 flex-1 items-center justify-center bg-surface/90">
         <ActivityIndicator size="large" color={colors.primary} />
-        {message && <Text className="mt-4 text-gray-600 font-medium">{message}</Text>}
+        {message && <Text className="mt-4 text-sm font-medium text-neutral-600">{message}</Text>}
       </View>
     );
   }
   return (
-    <View className="p-4 items-center">
+    <View className="items-center p-4">
       <ActivityIndicator size="small" color={colors.primary} />
-      {message && <Text className="mt-2 text-xs text-gray-500">{message}</Text>}
+      {message && <Text className="mt-2 text-xs font-medium text-neutral-600">{message}</Text>}
     </View>
   );
 }

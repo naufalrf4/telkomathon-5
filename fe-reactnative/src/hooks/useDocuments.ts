@@ -1,5 +1,5 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiGet, apiPost, apiDelete, apiUpload } from '../services/api';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiDelete, apiGet, apiPost, apiUpload } from '../services/api';
 import { Document } from '../types/api';
 
 export function useDocuments() {
@@ -18,6 +18,11 @@ export function useDocuments() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['documents'] }),
   });
 
+  const retryMutation = useMutation({
+    mutationFn: (id: string) => apiPost<Document>(`/documents/${id}/retry`, {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['documents'] }),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => apiDelete(`/documents/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['documents'] }),
@@ -31,6 +36,9 @@ export function useDocuments() {
     uploadDocument: uploadMutation.mutate,
     uploadDocumentAsync: uploadMutation.mutateAsync,
     isUploading: uploadMutation.isPending,
+    retryDocument: retryMutation.mutate,
+    retryDocumentAsync: retryMutation.mutateAsync,
+    isRetryingDocument: retryMutation.isPending,
     deleteDocument: deleteMutation.mutate,
     isDeleting: deleteMutation.isPending,
   };

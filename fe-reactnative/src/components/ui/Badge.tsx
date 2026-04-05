@@ -11,23 +11,23 @@ interface BadgeProps {
 
 export function Badge({ label, variant = 'default', size = 'sm', className }: BadgeProps) {
   const variants = {
-    primary: 'bg-primary/10 border-primary/20',
-    secondary: 'bg-secondary/10 border-secondary/20',
-    success: 'bg-green-100 border-green-200',
-    warning: 'bg-yellow-100 border-yellow-200',
-    error: 'bg-red-100 border-red-200',
-    info: 'bg-blue-100 border-blue-200',
-    default: 'bg-gray-100 border-gray-200',
+    primary: 'bg-primary-50 border-primary-100',
+    secondary: 'bg-neutral-100 border-neutral-200',
+    success: 'bg-emerald-50 border-emerald-100',
+    warning: 'bg-amber-50 border-amber-100',
+    error: 'bg-red-50 border-red-100',
+    info: 'bg-blue-50 border-blue-100',
+    default: 'bg-neutral-100 border-neutral-300',
   };
 
   const textColors = {
-    primary: 'text-primary',
-    secondary: 'text-secondary',
-    success: 'text-green-700',
-    warning: 'text-yellow-700',
+    primary: 'text-primary-700',
+    secondary: 'text-neutral-700',
+    success: 'text-emerald-700',
+    warning: 'text-amber-700',
     error: 'text-red-700',
     info: 'text-blue-700',
-    default: 'text-gray-700',
+    default: 'text-neutral-700',
   };
 
   const sizes = {
@@ -38,14 +38,14 @@ export function Badge({ label, variant = 'default', size = 'sm', className }: Ba
   return (
     <View 
       className={clsx(
-        "rounded-full border items-center self-start",
+        'self-start rounded-pill border px-2.5 py-1 items-center',
         variants[variant],
         className
       )}
     >
       <Text 
         className={clsx(
-          "font-medium",
+          'font-semibold uppercase tracking-[0.15em]',
           textColors[variant],
           sizes[size].split(' ').filter(c => c.startsWith('text-')).join(' ')
         )}

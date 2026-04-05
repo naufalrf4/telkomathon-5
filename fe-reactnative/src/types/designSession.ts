@@ -16,6 +16,9 @@ export interface SourceSummary {
   summary: string;
   key_points: string[];
   company_profile_focus: string[];
+  company_name?: string | null;
+  company_profile_summary?: string | null;
+  company_profile_confidence?: 'high' | 'medium' | 'low' | string | null;
 }
 
 export interface CourseContextPayload {

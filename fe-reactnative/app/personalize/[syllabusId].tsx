@@ -1,14 +1,20 @@
-import { View, Text, ScrollView, Alert, TextInput } from 'react-native';
+import { View, Text, ScrollView } from 'react-native';
 import { useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSyllabus } from '../../src/hooks/useSyllabus';
 import { Button } from '../../src/components/ui/Button';
+import { AlertBanner } from '../../src/components/ui/AlertBanner';
 import { Card } from '../../src/components/ui/Card';
+import { EmptyState } from '../../src/components/ui/EmptyState';
+import { LoadingSpinner } from '../../src/components/ui/LoadingSpinner';
 import { GapInputCard } from '../../src/components/personalize/GapInputCard';
 import { RecommendationCard } from '../../src/components/personalize/RecommendationCard';
+import { PageHeader } from '../../src/components/ui/PageHeader';
+import { TextField } from '../../src/components/ui/TextField';
 import { Ionicons } from '@expo/vector-icons';
 import { CompetencyGap, PersonalizationResult, LearningRecommendation } from '../../src/types/api';
 import { colors } from '../../src/theme/colors';
+import { getErrorMessage } from '../../src/services/api';
 
 // Helper to filter/group recommendations
 const groupRecommendations = (recommendations: LearningRecommendation[]) => {
@@ -34,30 +40,46 @@ const groupRecommendations = (recommendations: LearningRecommendation[]) => {
   return grouped;
 };
 
+type GapFormState = CompetencyGap & { id: string };
+
+function createGap(): GapFormState {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    skill: '',
+    current_level: 1,
+    required_level: 3,
+    gap_description: '',
+  };
+}
+
 export default function PersonalizeScreen() {
   const { syllabusId } = useLocalSearchParams();
   const router = useRouter();
-  const { personalize, isPersonalizing, personalization, syllabus } = useSyllabus(syllabusId as string, {
+  const { personalize, isPersonalizing, isLoadingPersonalization, personalization, clearPersonalization, syllabus } = useSyllabus(syllabusId as string, {
     includePersonalization: true,
   });
 
-  const [gaps, setGaps] = useState<CompetencyGap[]>([
-    { skill: '', current_level: 1, required_level: 3, gap_description: '' }
-  ]);
+  const [gaps, setGaps] = useState<GapFormState[]>([createGap()]);
   const [participantName, setParticipantName] = useState('');
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const addGap = () => {
-    setGaps([...gaps, { skill: '', current_level: 1, required_level: 3, gap_description: '' }]);
+    setGaps([...gaps, createGap()]);
   };
 
-  const removeGap = (index: number) => {
+  const removeGap = (id: string) => {
     if (gaps.length > 1) {
-      setGaps(gaps.filter((_, i) => i !== index));
+      setGaps(gaps.filter((gap) => gap.id !== id));
     }
   };
 
-  const updateGap = (index: number, field: keyof CompetencyGap, value: string | number) => {
+  const updateGap = (id: string, field: keyof CompetencyGap, value: string | number) => {
     const newGaps = [...gaps];
+    const index = newGaps.findIndex((gap) => gap.id === id);
+    if (index < 0) {
+      return;
+    }
     const gap = { ...newGaps[index] };
     
     if (field === 'current_level') {
@@ -75,77 +97,95 @@ export default function PersonalizeScreen() {
   };
 
   const handleSubmit = () => {
+    setSubmitError(null);
+    setFormError(null);
     if (!participantName.trim()) {
-      Alert.alert('Kesalahan', 'Nama peserta wajib diisi');
+      setFormError('Isi nama peserta terlebih dahulu.');
       return;
     }
     const validGaps = gaps.filter(g => g.skill.trim() !== '');
     if (validGaps.length === 0) {
-      Alert.alert('Kesalahan', 'Harap tambahkan setidaknya satu kesenjangan kompetensi');
+      setFormError('Tambahkan minimal satu kesenjangan kemampuan.');
       return;
     }
-    personalize({ participantName: participantName.trim(), gaps: validGaps });
+    personalize(
+      { participantName: participantName.trim(), gaps: validGaps.map(({ id: _id, ...gap }) => gap) },
+      {
+        onError: (error) => {
+          setSubmitError(getErrorMessage(error, 'Personalisasi belum berhasil dibuat.'));
+        },
+      }
+    );
   };
 
+  if (isLoadingPersonalization) {
+    return <LoadingSpinner fullScreen message="Memuat hasil personalisasi..." />;
+  }
+
   if (personalization) {
-    return <PersonalizationResultView result={personalization} currentRevisionIndex={syllabus?.revision_history.length ?? 0} onBack={() => router.back()} />;
+    return (
+      <PersonalizationResultView
+        result={personalization}
+        currentRevisionIndex={syllabus?.revision_history.length ?? 0}
+        onBack={() => router.push(`/personalize?syllabusId=${syllabusId}`)}
+        onReset={() => {
+          clearPersonalization();
+          setSubmitError(null);
+          setFormError(null);
+          setParticipantName('');
+          setGaps([createGap()]);
+        }}
+      />
+    );
   }
 
   return (
-    <ScrollView className="flex-1 bg-gray-50">
+    <ScrollView className="flex-1 bg-neutral-50">
       <View className="max-w-4xl mx-auto w-full p-6">
-        <View className="mb-8 flex-row items-center">
-          <Button 
-            variant="ghost" 
-            onPress={() => router.back()} 
-            className="mr-4 p-2"
-            icon={<Ionicons name="arrow-back" size={24} color={colors.secondary} />}
-          />
-          <View>
-            <Text className="text-2xl font-bold text-gray-900">Personalisasi Jalur Belajar</Text>
-            <Text className="text-gray-500 mt-1">Identifikasi kesenjangan keterampilan Anda untuk mendapatkan modul pembelajaran yang disesuaikan</Text>
-          </View>
-        </View>
+        <PageHeader
+          eyebrow="Langkah 3A"
+          title="Buat rekomendasi untuk satu peserta"
+          description="Masukkan nama peserta dan kesenjangan kemampuan, lalu buat rekomendasi belajar yang sesuai dengan kurikulum final ini."
+          actions={<Button title="Kembali" variant="ghost" onPress={() => router.push(`/personalize?syllabusId=${syllabusId}`)} icon={<Ionicons name="arrow-back" size={18} color={colors.textSecondary} />} />}
+        />
 
-        <Card className="mb-6 border border-indigo-100 bg-indigo-50">
+          <Card className="mb-6 mt-6 border border-indigo-100 bg-indigo-50">
           <View className="flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <View className="flex-1">
-              <Text className="font-semibold text-indigo-900">Butuh rekomendasi untuk banyak peserta?</Text>
-              <Text className="mt-1 text-sm text-indigo-700">Gunakan bulk recommendation untuk upload/paste CSV peserta dan memproses beberapa gap sekaligus.</Text>
+              <Text className="font-semibold text-indigo-900">Perlu memproses banyak peserta?</Text>
+              <Text className="mt-1 text-sm text-indigo-700">Pindah ke mode multi-user untuk upload atau paste CSV dalam satu batch.</Text>
             </View>
             <Button
-              title="Buka Bulk Recommendation"
+              title="Buka multi-user"
               variant="outline"
-              onPress={() => router.push(`/syllabus/${syllabusId}/bulk`)}
-              icon={<Ionicons name="people-outline" size={18} color={colors.secondary} />}
+              onPress={() => router.push(`/personalize/${syllabusId}/bulk`)}
+              icon={<Ionicons name="people-outline" size={18} color={colors.textSecondary} />}
             />
           </View>
-        </Card>
+          </Card>
 
-        <View className="space-y-6">
-          <Card className="border border-gray-200 bg-white shadow-sm rounded-xl">
-            <View className="gap-2">
-              <Text className="text-xs font-medium text-gray-500">Nama Peserta *</Text>
-              <Text className="text-sm text-gray-500">Masukkan nama peserta agar rekomendasi dan riwayat personalisasi tersimpan jelas.</Text>
-              <View className="rounded-lg border border-gray-300 bg-white px-3 py-1">
-                <TextInput
-                  className="py-2 text-gray-900"
-                  placeholder="contoh: Aulia Rahman"
-                  placeholderTextColor="#9CA3AF"
-                  value={participantName}
-                  onChangeText={setParticipantName}
-                />
-              </View>
-            </View>
+          {formError ? <AlertBanner variant="warning" title="Lengkapi data terlebih dahulu" description={formError} /> : null}
+          {submitError ? <AlertBanner variant="error" title="Personalisasi belum berhasil dibuat" description={submitError} /> : null}
+
+          <View className="space-y-6 mt-6">
+          <Card className="border border-neutral-300 bg-surface shadow-sm rounded-xl">
+            <TextField
+              label="Nama peserta"
+              required
+              hint="Gunakan nama yang mudah dikenali agar hasil tersimpan dengan jelas."
+              placeholder="Contoh: Aulia Rahman"
+              value={participantName}
+              onChangeText={setParticipantName}
+            />
           </Card>
 
           {gaps.map((gap, index) => (
             <GapInputCard
-              key={index}
+              key={gap.id}
               gap={gap}
               index={index}
-              onUpdate={(field, value) => updateGap(index, field, value)}
-              onRemove={() => removeGap(index)}
+              onUpdate={(field, value) => updateGap(gap.id, field, value)}
+              onRemove={() => removeGap(gap.id)}
               canRemove={gaps.length > 1}
             />
           ))}
@@ -155,11 +195,11 @@ export default function PersonalizeScreen() {
               title="Tambah Kesenjangan"
               variant="outline"
               onPress={addGap}
-              className="flex-1 border-dashed border-gray-300 py-3"
+              className="flex-1 border-dashed border-neutral-300 py-3"
               icon={<Ionicons name="add" size={18} color={colors.primary} />}
             />
             <Button
-              title="Analisis Kesenjangan & Buat"
+              title="Buat rekomendasi"
               onPress={handleSubmit}
               isLoading={isPersonalizing}
               size="lg"
@@ -173,7 +213,7 @@ export default function PersonalizeScreen() {
   );
 }
 
-function PersonalizationResultView({ result, currentRevisionIndex, onBack }: { result: PersonalizationResult, currentRevisionIndex: number, onBack: () => void }) {
+function PersonalizationResultView({ result, currentRevisionIndex, onBack, onReset }: { result: PersonalizationResult, currentRevisionIndex: number, onBack: () => void, onReset: () => void }) {
   const grouped = groupRecommendations(result.recommendations);
   const isOutdated = result.revision_index !== currentRevisionIndex;
   
@@ -184,46 +224,43 @@ function PersonalizationResultView({ result, currentRevisionIndex, onBack }: { r
   };
 
   return (
-    <ScrollView className="flex-1 bg-gray-50">
+    <ScrollView className="flex-1 bg-neutral-50">
         <View className="max-w-5xl mx-auto w-full p-6">
-          <View className="mb-8 flex-row items-center">
-          <Button 
-            variant="ghost" 
-            onPress={onBack} 
-            className="mr-4 p-2"
-            icon={<Ionicons name="arrow-back" size={24} color={colors.secondary} />}
+          <PageHeader
+            eyebrow="Hasil"
+            title="Rekomendasi belajar siap dipakai"
+            description={`Peserta: ${result.participant_name || 'Tanpa nama peserta'}`}
+            actions={(
+              <>
+                <Button variant="ghost" title="Kembali" onPress={onBack} icon={<Ionicons name="arrow-back" size={18} color={colors.textSecondary} />} />
+                <Button variant="outline" title="Buat lagi" onPress={onReset} />
+              </>
+            )}
           />
-          <View>
-            <Text className="text-2xl font-bold text-gray-900">Rencana Personal Anda</Text>
-            <Text className="text-gray-500 mt-1">Peserta: {result.participant_name || 'Tanpa nama peserta'}</Text>
-          </View>
-        </View>
 
-        <Card className={`mb-6 ${isOutdated ? 'border border-amber-200 bg-amber-50' : 'border border-emerald-200 bg-emerald-50'}`}>
-          <Text className={`font-semibold ${isOutdated ? 'text-amber-700' : 'text-emerald-700'}`}>
-            {isOutdated ? 'Hasil personalisasi ini berasal dari revision lama' : 'Hasil personalisasi sudah sinkron dengan revision aktif'}
-          </Text>
-          <Text className={`mt-1 text-sm ${isOutdated ? 'text-amber-700' : 'text-emerald-700'}`}>
-            Dibuat dari Version {result.revision_index + 1}. Revision aktif saat ini: Version {currentRevisionIndex + 1}.
-          </Text>
-        </Card>
+        <View className="mt-6">
+          <AlertBanner
+            variant={isOutdated ? 'warning' : 'success'}
+            title={isOutdated ? 'Hasil ini dibuat dari versi kurikulum sebelumnya' : 'Hasil ini sudah sesuai dengan versi kurikulum terbaru'}
+            description={`Dibuat dari versi ${result.revision_index + 1}. Versi aktif saat ini: ${currentRevisionIndex + 1}.`}
+          />
+        </View>
 
         {Object.entries(grouped).map(([priority, items]) => (
           items.length > 0 && (
             <View key={priority} className="mb-8">
-              <View className={`flex-row items-center mb-4 px-3 py-1.5 rounded-lg self-start
-                ${priority === 'High' ? 'bg-red-50 border border-red-100' : 
-                  priority === 'Medium' ? 'bg-yellow-50 border border-yellow-100' : 
-                  'bg-blue-50 border border-blue-100'}`}>
+                <View className={`mb-4 self-start rounded-lg px-3 py-1.5 flex-row items-center
+                  ${priority === 'High' ? 'bg-primary-50 border border-primary-100' : 
+                    priority === 'Medium' ? 'bg-yellow-50 border border-yellow-100' : 
+                    'bg-blue-50 border border-blue-100'}`}>
                 <View className={`w-2 h-2 rounded-full mr-2 
-                  ${priority === 'High' ? 'bg-red-500' : priority === 'Medium' ? 'bg-yellow-500' : 'bg-blue-500'}`} />
+                  ${priority === 'High' ? 'bg-primary-600' : priority === 'Medium' ? 'bg-yellow-500' : 'bg-blue-500'}`} />
                 <Text className={`font-bold text-sm uppercase tracking-wide
-                  ${priority === 'High' ? 'text-red-700' : priority === 'Medium' ? 'text-yellow-700' : 'text-blue-700'}`}>
+                  ${priority === 'High' ? 'text-primary-700' : priority === 'Medium' ? 'text-yellow-700' : 'text-blue-700'}`}>
                   {getPriorityText(priority)}
                 </Text>
               </View>
               
-              {/* Responsive Grid for cards */}
               <View className="flex-row flex-wrap -mx-2">
                 {items.map((item, idx) => (
                   <View key={idx} className="w-full md:w-1/2 px-2">

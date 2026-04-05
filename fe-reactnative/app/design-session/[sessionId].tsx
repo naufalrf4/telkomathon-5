@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, Text, TextInput, View, Pressable, useWindowDimensions } from 'react-native';
+import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { AlertBanner } from '../../src/components/ui/AlertBanner';
 import { Button } from '../../src/components/ui/Button';
 import { Card } from '../../src/components/ui/Card';
 import { LoadingSpinner } from '../../src/components/ui/LoadingSpinner';
+import { PageHeader } from '../../src/components/ui/PageHeader';
+import { ProgressStepper } from '../../src/components/ui/ProgressStepper';
+import { TextField } from '../../src/components/ui/TextField';
 import { useDesignSession } from '../../src/hooks/useDesignSession';
 import { getErrorMessage } from '../../src/services/api';
 import { colors } from '../../src/theme/colors';
@@ -12,18 +16,45 @@ import type { DesignOption, DesignSessionWizardStep, ELOOption } from '../../src
 
 const WIZARD_STEPS: Array<{ value: DesignSessionWizardStep; label: string }> = [
   { value: 'uploaded', label: 'Dokumen' },
-  { value: 'summary_ready', label: 'Ringkasan' },
-  { value: 'course_context_set', label: 'Konteks Kursus' },
-  { value: 'tlo_options_ready', label: 'Opsi TLO' },
-  { value: 'tlo_selected', label: 'TLO Dipilih' },
-  { value: 'performance_options_ready', label: 'Opsi Performa' },
-  { value: 'performance_selected', label: 'Performa Dipilih' },
-  { value: 'elo_options_ready', label: 'Opsi ELO' },
-  { value: 'elo_selected', label: 'ELO Dipilih' },
+  { value: 'summary_ready', label: 'Ringkasan & konteks' },
+  { value: 'course_context_set', label: 'Tujuan akhir' },
+  { value: 'tlo_options_ready', label: 'Pilih tujuan' },
+  { value: 'tlo_selected', label: 'Target performa' },
+  { value: 'performance_options_ready', label: 'Pilih performa' },
+  { value: 'performance_selected', label: 'Modul belajar' },
+  { value: 'elo_options_ready', label: 'Pilih modul' },
+  { value: 'elo_selected', label: 'Finalisasi' },
   { value: 'finalized', label: 'Selesai' },
 ];
 
 const LEVEL_OPTIONS = [1, 2, 3, 4, 5];
+
+function getStepHelper(step: string | undefined): string {
+  switch (step) {
+    case 'uploaded':
+      return 'Dokumen masih menunggu ringkasan. Jalankan analisis awal untuk melanjutkan.';
+    case 'summary_ready':
+      return 'Ringkasan perusahaan dan konteks bisnis sudah terdeteksi. Lengkapi topik dan level kursus sebelum membuat tujuan akhir.';
+    case 'course_context_set':
+      return 'Arah kursus tersimpan. Sekarang sistem bisa membuat beberapa opsi tujuan akhir.';
+    case 'tlo_options_ready':
+      return 'Bandingkan tujuan akhir yang tersedia lalu pilih yang paling tepat.';
+    case 'tlo_selected':
+      return 'Tujuan akhir sudah dipilih. Lanjutkan untuk menurunkan target performa.';
+    case 'performance_options_ready':
+      return 'Pilih target performa yang paling menggambarkan hasil belajar di tempat kerja.';
+    case 'performance_selected':
+      return 'Target performa sudah terkunci. Buat modul belajar pendukung berikutnya.';
+    case 'elo_options_ready':
+      return 'Pilih modul belajar, lalu buat ulang opsi bila kombinasi yang muncul belum pas.';
+    case 'elo_selected':
+      return 'Semua komponen utama sudah siap. Finalkan kurikulum untuk membuka tahap hasil dan personalisasi.';
+    case 'finalized':
+      return 'Kurikulum sudah selesai. Tinjau hasil akhir dan lanjutkan ke personalisasi dari halaman detail.';
+    default:
+      return 'Ikuti wizard secara berurutan sampai kurikulum final siap dipakai.';
+  }
+}
 
 export default function DesignSessionScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
@@ -56,28 +87,33 @@ export default function DesignSessionScreen() {
   const [commercialOverview, setCommercialOverview] = useState('');
   const [selectedEloIds, setSelectedEloIds] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [courseContextDirty, setCourseContextDirty] = useState(false);
+  const [eloDirty, setEloDirty] = useState(false);
 
   useEffect(() => {
-    if (!session?.course_context) {
+    if (!session?.course_context || courseContextDirty) {
       return;
     }
 
-    setTopic(session.course_context.topic);
-    setTargetLevel(session.course_context.target_level);
-    setAdditionalContext(session.course_context.additional_context);
+    setTopic(session.course_context.topic ?? '');
+    setTargetLevel(session.course_context.target_level ?? 3);
+    setAdditionalContext(session.course_context.additional_context ?? '');
     setCourseCategory(session.course_context.course_category ?? '');
-    setClientCompanyName(session.course_context.client_company_name ?? '');
+    setClientCompanyName(session.course_context.client_company_name ?? session.source_summary?.company_name ?? '');
     setCourseTitle(session.course_context.course_title ?? '');
-    setCommercialOverview(session.course_context.commercial_overview ?? '');
-  }, [session?.course_context]);
+    setCommercialOverview(
+      session.course_context.commercial_overview ?? session.source_summary?.company_profile_summary ?? ''
+    );
+  }, [courseContextDirty, session?.course_context, session?.source_summary]);
 
   useEffect(() => {
-    if (!session) {
+    if (!session || eloDirty) {
       return;
     }
 
     setSelectedEloIds(session.selected_elos.map((option) => option.id));
-  }, [session?.selected_elos]);
+  }, [eloDirty, session]);
 
   const currentStepIndex = useMemo(() => {
     if (!session) {
@@ -89,6 +125,7 @@ export default function DesignSessionScreen() {
   }, [session]);
 
   const activeStep = session?.finalized_syllabus_id ? 'finalized' : session?.wizard_step;
+  const activeStepLabel = WIZARD_STEPS[currentStepIndex]?.label ?? 'Mulai';
 
   const showStartAssist = activeStep === 'uploaded';
   const showCourseContext = activeStep === 'summary_ready';
@@ -100,18 +137,27 @@ export default function DesignSessionScreen() {
   const showSelectElo = activeStep === 'elo_options_ready';
   const showFinalize = activeStep === 'elo_selected';
   const showCompleted = activeStep === 'finalized';
-  const showPerformancePreview = !!session?.selected_performance && (showGenerateElo || showSelectElo || showFinalize || showCompleted);
+  const showPerformancePreview =
+    !!session?.selected_performance && (showGenerateElo || showSelectElo || showFinalize || showCompleted);
 
-  const runAction = async (action: () => Promise<unknown>, onSuccess?: () => void) => {
+  const runAction = async (
+    action: () => Promise<unknown>,
+    successCopy?: string,
+    onSuccess?: () => void
+  ) => {
     setErrorMessage(null);
+    setSuccessMessage(null);
 
     try {
       await action();
-      if (onSuccess) {
-        onSuccess();
+      setCourseContextDirty(false);
+      setEloDirty(false);
+      if (successCopy) {
+        setSuccessMessage(successCopy);
       }
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error, 'Terjadi kesalahan saat memproses sesi desain.'));
+      onSuccess?.();
+    } catch (err) {
+      setErrorMessage(getErrorMessage(err, 'Terjadi kesalahan saat memproses sesi desain.'));
     }
   };
 
@@ -128,16 +174,18 @@ export default function DesignSessionScreen() {
       return;
     }
 
-    void runAction(() =>
-      updateCourseContext({
-        topic: normalizedTopic,
-        target_level: targetLevel,
-        additional_context: normalizedContext,
-        course_category: normalizedCategory,
-        client_company_name: normalizedClient,
-        course_title: normalizedTitle,
-        commercial_overview: normalizedCommercialOverview,
-      })
+    void runAction(
+      () =>
+        updateCourseContext({
+          topic: normalizedTopic,
+          target_level: targetLevel,
+          additional_context: normalizedContext,
+          course_category: normalizedCategory,
+          client_company_name: normalizedClient,
+          course_title: normalizedTitle,
+          commercial_overview: normalizedCommercialOverview,
+        }),
+      'Arah kursus berhasil disimpan.'
     );
   };
 
@@ -146,11 +194,13 @@ export default function DesignSessionScreen() {
       async () => {
         const result = await finalizeSession();
         router.replace(`/syllabus/${result.syllabus.id}`);
-      }
+      },
+      'Kurikulum berhasil difinalkan.'
     );
   };
 
   const toggleElo = (option: ELOOption) => {
+    setEloDirty(true);
     setSelectedEloIds((current) =>
       current.includes(option.id)
         ? current.filter((id) => id !== option.id)
@@ -165,14 +215,16 @@ export default function DesignSessionScreen() {
   if (error && !session) {
     return (
       <ScrollView className="flex-1 bg-background">
-        <View className="max-w-3xl mx-auto w-full p-4 lg:p-8">
+        <View className="mx-auto w-full max-w-3xl p-4 lg:p-8">
           <Card className="border border-red-200 bg-red-50">
             <View className="gap-4">
               <Text className="text-xl font-bold text-red-700">Gagal memuat sesi desain</Text>
-              <Text className="text-red-700">{getErrorMessage(error, 'Sesi desain belum dapat dimuat saat ini.')}</Text>
+              <Text className="text-red-700">
+                {getErrorMessage(error, 'Sesi desain belum dapat dimuat saat ini.')}
+              </Text>
               <View className="flex-row flex-wrap gap-3">
-                <Button title="Coba Lagi" onPress={() => void refetch()} />
-                <Button title="Lihat Draft Aktif" variant="outline" onPress={() => router.push('/design-session')} />
+                <Button title="Coba lagi" onPress={() => void refetch()} />
+                <Button title="Lihat silabus" variant="outline" onPress={() => router.push('/syllabus/generated')} />
               </View>
             </View>
           </Card>
@@ -184,15 +236,17 @@ export default function DesignSessionScreen() {
   if (!session) {
     return (
       <ScrollView className="flex-1 bg-background">
-        <View className="max-w-3xl mx-auto w-full p-4 lg:p-8">
+        <View className="mx-auto w-full max-w-3xl p-4 lg:p-8">
           <Card className="border border-amber-200 bg-amber-50">
             <View className="gap-4">
               <Text className="text-xl font-bold text-amber-700">Sesi desain tidak ditemukan</Text>
-               <Text className="text-amber-700">Buka draft lain atau mulai create flow baru dari daftar draft aktif.</Text>
-               <View className="flex-row flex-wrap gap-3">
-                 <Button title="Mulai Create Flow" onPress={() => router.push('/syllabus/create')} />
-                 <Button title="Lihat Draft Aktif" variant="outline" onPress={() => router.push('/design-session')} />
-               </View>
+              <Text className="text-amber-700">
+                Buka draft lain atau mulai create flow baru dari daftar draft aktif.
+              </Text>
+              <View className="flex-row flex-wrap gap-3">
+                <Button title="Mulai create flow" onPress={() => router.push('/syllabus/create')} />
+                <Button title="Lihat silabus" variant="outline" onPress={() => router.push('/syllabus/generated')} />
+              </View>
             </View>
           </Card>
         </View>
@@ -202,268 +256,264 @@ export default function DesignSessionScreen() {
 
   return (
     <ScrollView className="flex-1 bg-background" showsVerticalScrollIndicator={false}>
-      <View className="max-w-6xl mx-auto w-full p-4 lg:p-8 gap-6">
-        <View className="gap-2">
-          <Text className="text-3xl font-bold text-gray-900">
-            {session.course_context?.topic ?? 'Sesi Desain Baru'}
-          </Text>
-          <Text className="text-gray-500 text-base">
-            Create flow ini mengikuti progres backend. Setiap langkah akan tersimpan otomatis saat Anda mengirim pilihan berikutnya.
-          </Text>
-        </View>
+      <View className="mx-auto w-full max-w-6xl gap-6 p-4 lg:p-8">
+        <PageHeader
+          eyebrow={`Tahap aktif · ${activeStepLabel}`}
+          title={session.course_context?.topic?.trim() || 'Susun kurikulum baru'}
+          description="Wizard ini sekarang mengikuti alur horizontal: ringkasan perusahaan → arah kursus → tujuan akhir → performa → modul belajar → finalisasi. Setiap aksi memberi status yang jelas dan tidak berjalan diam-diam."
+          actions={
+            <Button
+              title="Kembali ke daftar"
+              variant="ghost"
+              onPress={() => router.push('/syllabus/generated')}
+              icon={<Ionicons name="arrow-back" size={18} color={colors.textSecondary} />}
+            />
+          }
+          aside={
+            <View className="gap-1">
+              <Text className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Langkah sekarang</Text>
+              <Text className="text-sm font-semibold text-neutral-900">{activeStepLabel}</Text>
+            </View>
+          }
+        />
+
+        <ProgressStepper steps={WIZARD_STEPS} activeIndex={currentStepIndex} />
+
+        {errorMessage ? <AlertBanner variant="error" title="Langkah ini belum berhasil" description={errorMessage} /> : null}
+        {successMessage ? <AlertBanner variant="success" title="Perubahan tersimpan" description={successMessage} /> : null}
 
         <View className={`gap-6 ${isDesktop ? 'flex-row items-start' : ''}`}>
-          <View className={isDesktop ? 'w-[320px] gap-4' : 'gap-4'}>
-            <Card title="Progres Sesi" subtitle={`Langkah aktif: ${WIZARD_STEPS[currentStepIndex]?.label ?? session.wizard_step}`}>
-              <View className="gap-3">
-                {WIZARD_STEPS.map((step, index) => {
-                  const isComplete = index < currentStepIndex;
-                  const isActive = step.value === session.wizard_step;
-
-                  return (
-                    <View key={step.value} className="flex-row items-center gap-3">
-                      <View className={`w-8 h-8 rounded-full items-center justify-center ${isComplete || isActive ? 'bg-primary' : 'bg-gray-100'}`}>
-                        <Ionicons
-                          name={isComplete ? 'checkmark' : 'ellipse-outline'}
-                          size={16}
-                          color={isComplete || isActive ? '#FFFFFF' : colors.textSecondary}
-                        />
-                      </View>
-                      <Text className={isActive ? 'font-semibold text-gray-900' : 'text-gray-500'}>{step.label}</Text>
-                    </View>
-                  );
-                })}
-              </View>
-            </Card>
-
-            <Card title="Ringkasan Sumber" subtitle={`${session.document_ids.length} dokumen dipilih`}>
-              {session.source_summary ? (
-                <View className="gap-3">
-                  <Text className="text-gray-700 leading-6">{session.source_summary.summary}</Text>
-                  {session.source_summary.company_profile_focus.length > 0 ? (
-                    <View className="gap-2 rounded-xl border border-gray-100 bg-gray-50 p-3">
-                      <Text className="text-xs font-semibold uppercase tracking-wide text-gray-500">Company profile focus</Text>
-                      {session.source_summary.company_profile_focus.map((point) => (
-                        <Text key={point} className="text-sm text-gray-700">• {point}</Text>
-                      ))}
-                    </View>
-                  ) : null}
-                  {session.source_summary.key_points.map((point) => (
-                    <View key={point} className="flex-row items-start gap-2">
-                      <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
-                      <Text className="flex-1 text-gray-600">{point}</Text>
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <Text className="text-gray-500">Ringkasan sumber akan muncul setelah Anda menjalankan analisis awal.</Text>
-              )}
-            </Card>
-          </View>
-
-          <View className="flex-1 gap-4">
-            {errorMessage ? (
-              <Card className="border border-red-200 bg-red-50">
-                <Text className="text-red-700 font-medium">{errorMessage}</Text>
-              </Card>
-            ) : null}
-
+          <View className={isDesktop ? 'flex-1 gap-6' : 'gap-6'}>
             {showStartAssist ? (
-              <Card title="1. Analisis Dokumen" subtitle="Backend akan membuat ringkasan sumber sebagai titik awal desain.">
-                <Text className="text-gray-600 mb-4">
-                  Jalankan asistensi awal untuk merangkum dokumen dan menyiapkan langkah-langkah berikutnya.
-                </Text>
-                <Button
-                  title="Mulai Analisis"
-                  onPress={() => void runAction(() => startAssist())}
-                  isLoading={isWorking}
-                  icon={<Ionicons name="sparkles-outline" size={18} color="white" />}
-                />
+              <Card title="Mulai ringkasan sumber" subtitle="Sistem akan merangkum dokumen yang dipilih dan menyiapkan konteks perusahaan.">
+                <View className="gap-4">
+                  <Text className="text-neutral-600">
+                    Jalankan langkah ini bila sesi lama Anda belum memiliki ringkasan awal.
+                  </Text>
+                  <Button
+                    title="Mulai ringkasan"
+                    onPress={() => void runAction(() => startAssist(), 'Ringkasan sumber berhasil diperbarui.')}
+                    isLoading={isWorking}
+                    icon={<Ionicons name="sparkles-outline" size={18} color="white" />}
+                  />
+                </View>
               </Card>
             ) : null}
 
             {showCourseContext ? (
-                <Card title="2. Tentukan Konteks Kursus" subtitle="Lengkapi arah kursus dan konteks ekspor agar backend bisa membuat opsi TLO sekaligus menyiapkan snapshot final.">
-                  <View className="gap-4">
-                  <View className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                    <Text className="text-sm text-gray-600">Kolom bertanda <Text className="font-semibold text-primary">*</Text> wajib diisi. Kolom lain bersifat opsional.</Text>
+              <Card title="Tetapkan arah kurikulum" subtitle="Nama perusahaan dan ringkasan bisnis sudah diisi otomatis bila sistem berhasil mendeteksinya.">
+                <View className="gap-4">
+                  <View className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
+                    <Text className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">Yang perlu Anda lakukan sekarang</Text>
+                    <Text className="mt-2 text-sm leading-6 text-neutral-700">{getStepHelper(activeStep)}</Text>
                   </View>
-                   <View className="gap-2">
-                    <Text className="font-semibold text-gray-900">Topik Kursus <Text className="text-primary">*</Text></Text>
-                    <TextInput
-                      value={topic}
-                      onChangeText={setTopic}
-                      placeholder="Contoh: Fundamen Data Analytics"
-                      className="border border-gray-200 rounded-xl px-4 py-3 bg-white text-gray-900"
-                    />
-                  </View>
-
+                  <TextField
+                    label="Topik kursus"
+                    required
+                    value={topic}
+                    onChangeText={(value) => {
+                      setCourseContextDirty(true);
+                      setTopic(value);
+                    }}
+                    placeholder="Contoh: Fundamen Data Analytics"
+                  />
                   <View className="gap-2">
-                    <Text className="font-semibold text-gray-900">Target Level <Text className="text-primary">*</Text></Text>
+                    <Text className="font-semibold text-neutral-900">
+                      Target level <Text className="text-primary">*</Text>
+                    </Text>
                     <View className="flex-row flex-wrap gap-2">
                       {LEVEL_OPTIONS.map((level) => (
                         <Pressable
                           key={level}
-                          onPress={() => setTargetLevel(level)}
-                          className={`px-4 py-2 rounded-full border ${targetLevel === level ? 'border-primary bg-red-50' : 'border-gray-200 bg-white'}`}
+                          onPress={() => {
+                            setCourseContextDirty(true);
+                            setTargetLevel(level);
+                          }}
+                          className={`rounded-full border px-4 py-2 ${
+                            targetLevel === level ? 'border-primary bg-primary-50' : 'border-neutral-200 bg-surface'
+                          }`}
                         >
-                          <Text className={targetLevel === level ? 'text-primary font-semibold' : 'text-gray-600'}>Level {level}</Text>
+                          <Text className={targetLevel === level ? 'font-semibold text-primary' : 'text-neutral-600'}>
+                            Level {level}
+                          </Text>
                         </Pressable>
                       ))}
                     </View>
                   </View>
-
-                  <View className="gap-2">
-                    <Text className="font-semibold text-gray-900">Kategori Kursus <Text className="text-gray-400">(Opsional)</Text></Text>
-                    <TextInput
-                      value={courseCategory}
-                      onChangeText={setCourseCategory}
-                      placeholder="Contoh: Technical Upskilling"
-                      className="border border-gray-200 rounded-xl px-4 py-3 bg-white text-gray-900"
-                    />
-                  </View>
-
-                  <View className="gap-2">
-                    <Text className="font-semibold text-gray-900">Nama Klien / Perusahaan <Text className="text-gray-400">(Opsional)</Text></Text>
-                    <TextInput
-                      value={clientCompanyName}
-                      onChangeText={setClientCompanyName}
-                      placeholder="Contoh: Telkom Indonesia"
-                      className="border border-gray-200 rounded-xl px-4 py-3 bg-white text-gray-900"
-                    />
-                  </View>
-
-                  <View className="gap-2">
-                    <Text className="font-semibold text-gray-900">Judul Kursus untuk Export <Text className="text-gray-400">(Opsional)</Text></Text>
-                    <TextInput
-                      value={courseTitle}
-                      onChangeText={setCourseTitle}
-                      placeholder="Contoh: AI for Business Decision Making"
-                      className="border border-gray-200 rounded-xl px-4 py-3 bg-white text-gray-900"
-                    />
-                  </View>
-
-                  <View className="gap-2">
-                    <Text className="font-semibold text-gray-900">Konteks Tambahan <Text className="text-gray-400">(Opsional)</Text></Text>
-                    <TextInput
-                      value={additionalContext}
-                      onChangeText={setAdditionalContext}
-                      multiline
-                      numberOfLines={5}
-                      textAlignVertical="top"
-                      placeholder="Tambahkan sasaran peserta, batasan, atau kebutuhan bisnis khusus."
-                      className="border border-gray-200 rounded-xl px-4 py-3 bg-white text-gray-900 min-h-[140px]"
-                    />
-                  </View>
-
-                  <View className="gap-2">
-                    <Text className="font-semibold text-gray-900">Ringkasan Komersial / Business Need <Text className="text-gray-400">(Opsional)</Text></Text>
-                    <TextInput
-                      value={commercialOverview}
-                      onChangeText={setCommercialOverview}
-                      multiline
-                      numberOfLines={4}
-                      textAlignVertical="top"
-                      placeholder="Tuliskan konteks komersial, target outcome bisnis, atau prioritas stakeholder."
-                      className="border border-gray-200 rounded-xl px-4 py-3 bg-white text-gray-900 min-h-[120px]"
-                    />
-                  </View>
-
-                  <Button title="Simpan Konteks Kursus" onPress={handleSaveCourseContext} isLoading={isWorking} />
+                  <TextField
+                    label="Kategori kursus"
+                    hint="Opsional"
+                    value={courseCategory}
+                    onChangeText={(value) => {
+                      setCourseContextDirty(true);
+                      setCourseCategory(value);
+                    }}
+                    placeholder="Contoh: Technical Upskilling"
+                  />
+                  <TextField
+                    label="Nama klien atau perusahaan"
+                    hint={session.source_summary?.company_profile_confidence === 'low' ? 'Hasil deteksi ini masih bisa Anda koreksi.' : 'Terisi dari hasil ekstraksi dokumen.'}
+                    value={clientCompanyName}
+                    onChangeText={(value) => {
+                      setCourseContextDirty(true);
+                      setClientCompanyName(value);
+                    }}
+                    placeholder="Contoh: PT Telkom Indonesia"
+                  />
+                  <TextField
+                    label="Judul tampilan kursus"
+                    hint="Opsional"
+                    value={courseTitle}
+                    onChangeText={(value) => {
+                      setCourseContextDirty(true);
+                      setCourseTitle(value);
+                    }}
+                    placeholder="Contoh: AI for Business Decision Making"
+                  />
+                  <TextField
+                    label="Konteks tambahan"
+                    hint="Opsional"
+                    value={additionalContext}
+                    onChangeText={(value) => {
+                      setCourseContextDirty(true);
+                      setAdditionalContext(value);
+                    }}
+                    multiline
+                    placeholder="Tambahkan sasaran peserta, batasan, atau kebutuhan bisnis khusus."
+                  />
+                  <TextField
+                    label="Ringkasan perusahaan / kebutuhan bisnis"
+                    hint="Editable — sudah diisi otomatis dari dokumen bila tersedia."
+                    value={commercialOverview}
+                    onChangeText={(value) => {
+                      setCourseContextDirty(true);
+                      setCommercialOverview(value);
+                    }}
+                    multiline
+                    placeholder="Contoh: PT X bergerak di layanan digital dan konektivitas..."
+                  />
+                  <Button title="Simpan arah kurikulum" onPress={handleSaveCourseContext} isLoading={isWorking} />
                 </View>
               </Card>
             ) : null}
 
             {showGenerateTlo ? (
-              <Card title="3. Buat Opsi TLO" subtitle="Gunakan ringkasan dan konteks kursus untuk menurunkan alternatif tujuan akhir.">
-                <Text className="text-gray-600 mb-4">
-                  Setelah opsi dibuat, Anda bisa memilih TLO terbaik sebelum masuk ke performa dan ELO.
-                </Text>
-                <Button title="Generate TLO" onPress={() => void runAction(() => generateTloOptions())} isLoading={isWorking} />
+              <Card title="Buat tujuan akhir" subtitle="Sistem akan menurunkan beberapa opsi tujuan akhir dari konteks kursus yang sudah Anda tetapkan.">
+                <Button
+                  title="Buat tujuan akhir"
+                  onPress={() => void runAction(() => generateTloOptions(), 'Opsi tujuan akhir berhasil dibuat.')}
+                  isLoading={isWorking}
+                />
               </Card>
             ) : null}
 
             {showSelectTlo ? (
               <OptionSelectionCard
-                title="4. Pilih TLO"
-                subtitle="Pilih satu opsi TLO sebagai arah utama silabus. Jika belum pas, generate ulang sampai sesuai."
+                title="Pilih tujuan akhir"
+                subtitle="Pilih satu tujuan yang paling mewakili hasil belajar akhir. Jika belum pas, coba opsi lain."
                 options={session.tlo_options}
-                actionLabel="Gunakan TLO Ini"
+                actionLabel="Gunakan tujuan ini"
                 isWorking={isWorking}
-                onSelect={(optionId) => void runAction(() => selectTlo(optionId))}
-                secondaryActionLabel="Generate Ulang TLO"
-                onSecondaryAction={() => void runAction(() => generateTloOptions())}
+                onSelect={(optionId) =>
+                  void runAction(() => selectTlo(optionId), 'Tujuan akhir berhasil dipilih.')
+                }
+                secondaryActionLabel="Coba opsi lain"
+                onSecondaryAction={() =>
+                  void runAction(() => generateTloOptions(), 'Opsi tujuan akhir baru berhasil dibuat.')
+                }
               />
             ) : null}
 
             {showGeneratePerformance ? (
-              <Card title="5. Buat Opsi Performa" subtitle="Backend akan menurunkan alternatif performa dari TLO terpilih.">
-                <Text className="text-gray-600 mb-4">Langkah ini menyiapkan bentuk performa utama yang harus dicapai peserta.</Text>
-                <Button title="Generate Performa" onPress={() => void runAction(() => generatePerformanceOptions())} isLoading={isWorking} />
-              </Card>
-            ) : null}
-
-            {showPerformancePreview ? (
-              <Card title="PCS Preview" subtitle="Preview backend untuk Performance, Condition, dan Standard sebelum syllabus difinalkan.">
-                <View className="gap-4">
-                  <PreviewField label="Performance" value={session.selected_performance?.text ?? 'Belum dipilih'} />
-                  <PreviewField label="Condition" value={session.preview_condition_result ?? 'Akan muncul setelah performa dipilih.'} />
-                  <PreviewField label="Standard" value={session.preview_standard_result ?? 'Akan disesuaikan setelah ELO dipilih.'} />
-                </View>
+              <Card title="Buat target performa" subtitle="Sistem akan menurunkan target performa yang mendukung tujuan akhir yang Anda pilih.">
+                <Button
+                  title="Buat target performa"
+                  onPress={() =>
+                    void runAction(
+                      () => generatePerformanceOptions(),
+                      'Opsi target performa berhasil dibuat.'
+                    )
+                  }
+                  isLoading={isWorking}
+                />
               </Card>
             ) : null}
 
             {showSelectPerformance ? (
               <OptionSelectionCard
-                title="6. Pilih Performa"
-                subtitle="Pilih satu performa terbaik sebagai dasar penurunan ELO. Jika belum pas, generate ulang sampai sesuai."
+                title="Pilih target performa"
+                subtitle="Pilih satu target performa sebagai dasar modul belajar. Jika belum pas, coba opsi lain."
                 options={session.performance_options}
-                actionLabel="Gunakan Performa Ini"
+                actionLabel="Gunakan target ini"
                 isWorking={isWorking}
-                onSelect={(optionId) => void runAction(() => selectPerformance(optionId))}
-                secondaryActionLabel="Generate Ulang Performa"
-                onSecondaryAction={() => void runAction(() => generatePerformanceOptions())}
+                onSelect={(optionId) =>
+                  void runAction(() => selectPerformance(optionId), 'Target performa berhasil dipilih.')
+                }
+                secondaryActionLabel="Coba opsi lain"
+                onSecondaryAction={() =>
+                  void runAction(
+                    () => generatePerformanceOptions(),
+                    'Opsi target performa baru berhasil dibuat.'
+                  )
+                }
               />
             ) : null}
 
             {showGenerateElo ? (
-              <Card title="7. Buat Opsi ELO" subtitle="Backend akan membuat daftar ELO berdasarkan performa yang dipilih.">
-                <Text className="text-gray-600 mb-4">
-                  Setelah opsi ELO tersedia, Anda dapat memilih beberapa modul yang paling cocok untuk silabus akhir.
-                </Text>
-                <Button title="Generate ELO" onPress={() => void runAction(() => generateEloOptions())} isLoading={isWorking} />
+              <Card title="Buat modul belajar" subtitle="Sistem akan membuat beberapa modul belajar dari target performa yang sudah dipilih.">
+                <Button
+                  title="Buat modul belajar"
+                  onPress={() => void runAction(() => generateEloOptions(), 'Opsi modul belajar berhasil dibuat.')}
+                  isLoading={isWorking}
+                />
               </Card>
             ) : null}
 
             {showSelectElo ? (
-              <Card title="8. Pilih ELO" subtitle="Anda dapat memilih lebih dari satu ELO untuk dibawa ke silabus final. Jika opsi belum cocok, generate ulang untuk hasil yang lebih tepat.">
+              <Card title="Pilih modul belajar" subtitle="Anda dapat memilih lebih dari satu modul. Jika belum pas, buat ulang opsi agar hasilnya lebih cocok.">
                 <View className="gap-4">
                   <View className="flex-row justify-end">
-                    <Button title="Generate Ulang ELO" variant="outline" onPress={() => void runAction(() => generateEloOptions())} isLoading={isWorking} />
+                    <Button
+                      title="Buat ulang opsi"
+                      variant="outline"
+                      onPress={() =>
+                        void runAction(() => generateEloOptions(), 'Opsi modul belajar berhasil diperbarui.')
+                      }
+                      isLoading={isWorking}
+                    />
                   </View>
                   {session.elo_options.map((option) => {
                     const isSelected = selectedEloIds.includes(option.id);
-
                     return (
                       <Pressable
                         key={option.id}
                         onPress={() => toggleElo(option)}
-                        className={`rounded-xl border p-4 ${isSelected ? 'border-primary bg-red-50' : 'border-gray-200 bg-white'}`}
+                        className={`rounded-2xl border p-4 ${
+                          isSelected ? 'border-primary bg-primary-50' : 'border-neutral-200 bg-surface'
+                        }`}
                       >
                         <View className="flex-row items-start justify-between gap-3">
                           <View className="flex-1 gap-2">
-                            <Text className="text-lg font-semibold text-gray-900">{option.elo}</Text>
-                            <Text className="text-gray-600">{option.rationale}</Text>
+                            <Text className="text-lg font-semibold text-neutral-900">{option.elo}</Text>
+                            <Text className="text-neutral-600">{option.rationale}</Text>
                           </View>
-                          <Ionicons name={isSelected ? 'checkbox' : 'square-outline'} size={24} color={isSelected ? colors.primary : colors.textSecondary} />
+                          <Ionicons
+                            name={isSelected ? 'checkbox' : 'square-outline'}
+                            size={24}
+                            color={isSelected ? colors.primary : colors.textSecondary}
+                          />
                         </View>
                       </Pressable>
                     );
                   })}
-
                   <Button
-                    title="Simpan Pilihan ELO"
-                    onPress={() => void runAction(() => selectElos(selectedEloIds))}
+                    title="Simpan modul terpilih"
+                    onPress={() =>
+                      void runAction(
+                        () => selectElos(selectedEloIds),
+                        'Modul belajar terpilih berhasil disimpan.'
+                      )
+                    }
                     disabled={selectedEloIds.length === 0}
                     isLoading={isWorking}
                   />
@@ -472,13 +522,13 @@ export default function DesignSessionScreen() {
             ) : null}
 
             {showFinalize ? (
-              <Card title="9. Finalisasi Silabus" subtitle="Sesi siap diubah menjadi silabus akhir yang dapat dibuka dan diunduh.">
+              <Card title="Finalkan kurikulum" subtitle="Semua komponen utama sudah siap untuk disusun menjadi hasil akhir.">
                 <View className="gap-4">
-                  <Text className="text-gray-600">
-                    Backend akan membuat silabus final dari pilihan TLO, performa, dan ELO yang sudah Anda tetapkan.
+                  <Text className="text-neutral-600">
+                    Sistem akan menyusun kurikulum final dari tujuan, target performa, dan modul belajar yang sudah Anda tetapkan.
                   </Text>
                   <Button
-                    title="Finalisasi Sekarang"
+                    title="Finalkan kurikulum"
                     onPress={handleFinalize}
                     isLoading={isWorking}
                     icon={<Ionicons name="checkmark-circle-outline" size={18} color="white" />}
@@ -488,15 +538,51 @@ export default function DesignSessionScreen() {
             ) : null}
 
             {showCompleted ? (
-              <Card title="Silabus Siap" subtitle="Sesi desain ini sudah selesai dan dapat dibuka kembali kapan saja.">
-                <View className="gap-4">
-                   <Text className="text-gray-600">Silabus akhir sudah dibuat. Lanjutkan ke halaman detail untuk revisi, personalisasi, atau unduh DOCX.</Text>
-                   <View className="flex-row flex-wrap gap-3">
-                     <Button title="Buka Silabus" onPress={() => router.push(`/syllabus/${session.finalized_syllabus_id}`)} />
-                     <Button title="Generated List" variant="outline" onPress={() => router.push('/syllabus/generated')} />
-                   </View>
-                 </View>
-               </Card>
+              <Card title="Kurikulum siap dipakai" subtitle="Penyusunan selesai. Langkah berikutnya adalah meninjau hasilnya dan masuk ke personalisasi dari halaman detail silabus.">
+                <View className="flex-row flex-wrap gap-3">
+                  <Button title="Buka kurikulum" onPress={() => router.push(`/syllabus/${session.finalized_syllabus_id}`)} />
+                  <Button title="Lihat daftar" variant="outline" onPress={() => router.push('/syllabus/generated')} />
+                </View>
+              </Card>
+            ) : null}
+          </View>
+
+          <View className={isDesktop ? 'w-[320px] gap-6' : 'gap-6'}>
+            <Card title="Ringkasan sumber" subtitle={session.source_summary?.company_name || 'Konteks materi dan perusahaan'}>
+              <View className="gap-3">
+                <Text className="text-sm leading-6 text-neutral-700">
+                  {session.source_summary?.company_profile_summary || session.source_summary?.summary || 'Ringkasan sumber akan muncul setelah analisis awal.'}
+                </Text>
+                {session.source_summary?.company_profile_focus?.length ? (
+                  <View className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
+                    <Text className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">Fokus perusahaan</Text>
+                    <View className="mt-2 gap-2">
+                      {session.source_summary.company_profile_focus.map((point) => (
+                        <Text key={point} className="text-sm leading-6 text-neutral-700">• {point}</Text>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
+                {session.source_summary?.company_profile_confidence ? (
+                  <Text className="text-xs text-neutral-500">
+                    Confidence deteksi: {session.source_summary.company_profile_confidence}
+                  </Text>
+                ) : null}
+              </View>
+            </Card>
+
+            <Card title="Panduan tahap aktif" subtitle={activeStepLabel}>
+              <Text className="text-sm leading-6 text-neutral-700">{getStepHelper(activeStep)}</Text>
+            </Card>
+
+            {showPerformancePreview ? (
+              <Card title="Pratinjau target hasil" subtitle="Pastikan performa, kondisi, dan standar sudah sejalan sebelum finalisasi.">
+                <View className="gap-3">
+                  <PreviewField label="Performance" value={session.selected_performance?.text ?? 'Belum dipilih'} />
+                  <PreviewField label="Condition" value={session.preview_condition_result ?? 'Akan muncul setelah performa dipilih.'} />
+                  <PreviewField label="Standard" value={session.preview_standard_result ?? 'Akan disesuaikan setelah ELO dipilih.'} />
+                </View>
+              </Card>
             ) : null}
           </View>
         </View>
@@ -516,7 +602,16 @@ interface OptionSelectionCardProps {
   onSecondaryAction?: () => void;
 }
 
-function OptionSelectionCard({ title, subtitle, options, actionLabel, isWorking, onSelect, secondaryActionLabel, onSecondaryAction }: OptionSelectionCardProps) {
+function OptionSelectionCard({
+  title,
+  subtitle,
+  options,
+  actionLabel,
+  isWorking,
+  onSelect,
+  secondaryActionLabel,
+  onSecondaryAction,
+}: OptionSelectionCardProps) {
   return (
     <Card title={title} subtitle={subtitle}>
       <View className="gap-4">
@@ -526,17 +621,17 @@ function OptionSelectionCard({ title, subtitle, options, actionLabel, isWorking,
           </View>
         ) : null}
         {options.map((option) => (
-          <Card key={option.id} className="border border-gray-200 bg-gray-50">
+          <Card key={option.id} className="border border-neutral-200 bg-neutral-50">
             <View className="gap-3">
-              <Text className="text-lg font-semibold text-gray-900">{option.text}</Text>
-              <Text className="text-gray-600 leading-6">{option.rationale}</Text>
+              <View className="flex-row items-start justify-between gap-3">
+                <Text className="flex-1 text-lg font-semibold text-neutral-900">{option.text}</Text>
+                <View className="rounded-full bg-primary-50 px-3 py-1">
+                  <Text className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Pilihan</Text>
+                </View>
+              </View>
+              <Text className="leading-6 text-neutral-600">{option.rationale}</Text>
               <View className="flex-row justify-end">
-                <Button
-                  title={actionLabel}
-                  variant="outline"
-                  onPress={() => onSelect(option.id)}
-                  isLoading={isWorking}
-                />
+                <Button title={actionLabel} variant="outline" onPress={() => onSelect(option.id)} isLoading={isWorking} />
               </View>
             </View>
           </Card>
@@ -548,9 +643,9 @@ function OptionSelectionCard({ title, subtitle, options, actionLabel, isWorking,
 
 function PreviewField({ label, value }: { label: string; value: string }) {
   return (
-    <View className="gap-1 rounded-xl border border-gray-100 bg-gray-50 p-3">
-      <Text className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</Text>
-      <Text className="text-sm leading-6 text-gray-800">{value}</Text>
+    <View className="gap-1 rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
+      <Text className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{label}</Text>
+      <Text className="text-sm leading-6 text-neutral-800">{value}</Text>
     </View>
   );
 }

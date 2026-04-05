@@ -18,28 +18,28 @@ export function ELOAccordion({ elos }: ELOAccordionProps) {
   return (
     <View className="space-y-2">
       {elos.map((item, index) => (
-        <View key={index} className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+        <View key={index} className="overflow-hidden rounded-lg border border-neutral-300 bg-surface">
           <Pressable
             onPress={() => toggle(index)}
-            className="flex-row items-center justify-between bg-gray-50 p-4 active:bg-gray-100"
+            className="flex-row items-center justify-between bg-neutral-50 p-4 active:bg-neutral-50"
           >
             <View className="mr-4 flex-1">
-              <Text className="text-sm font-semibold text-gray-800">ELO {index + 1}</Text>
-              <Text className="mt-1 text-base text-gray-600" numberOfLines={expandedIndex === index ? undefined : 1}>
+              <Text className="text-sm font-semibold text-neutral-800">ELO {index + 1}</Text>
+              <Text className="mt-1 text-base text-neutral-600" numberOfLines={expandedIndex === index ? undefined : 1}>
                 {item.elo}
               </Text>
             </View>
             <Ionicons
               name={expandedIndex === index ? 'chevron-up' : 'chevron-down'}
               size={20}
-              color={colors.textSecondary}
+              color={expandedIndex === index ? colors.primary : colors.textSecondary}
             />
           </Pressable>
 
           {expandedIndex === index ? (
-            <View className="border-t border-gray-100 bg-white p-4">
-              <Text className="text-xs font-bold uppercase text-gray-400">Capability statement</Text>
-              <Text className="mt-2 text-sm leading-6 text-gray-700">{item.elo}</Text>
+            <View className="border-t border-neutral-300 bg-surface p-4">
+              <Text className="text-xs font-bold uppercase text-neutral-400">Capability statement</Text>
+              <Text className="mt-2 text-sm leading-6 text-neutral-700">{item.elo}</Text>
             </View>
           ) : null}
         </View>

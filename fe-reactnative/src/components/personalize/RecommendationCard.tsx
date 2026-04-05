@@ -3,6 +3,7 @@ import { Badge } from '../../components/ui/Badge';
 import { Card } from '../../components/ui/Card';
 import { LearningRecommendation } from '../../types/api';
 import { colors } from '../../theme/colors';
+import { Ionicons } from '@expo/vector-icons';
 
 interface RecommendationCardProps {
   recommendation: LearningRecommendation;
@@ -42,30 +43,36 @@ export function RecommendationCard({ recommendation }: RecommendationCardProps) 
   const priorityLabel = getPriorityLabel(recommendation.priority);
 
   return (
-    <Card className="mb-4 bg-white border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-      <View className="flex-row justify-between items-start mb-2">
+    <Card className="mb-4 border border-neutral-300 bg-surface shadow-sm">
+      <View className="mb-3 flex-row items-start justify-between gap-3">
         <Badge 
           label={recommendation.type} 
           variant="default" 
-          className="bg-gray-50 text-gray-700 border-gray-200"
+          className="bg-neutral-100 border-neutral-300"
         />
-        <Text className="text-xs font-medium text-gray-500 bg-gray-50 px-2 py-1 rounded-md">
-          ~{recommendation.estimated_duration_minutes} menit
-        </Text>
+        <View className="rounded-full bg-primary-50 px-3 py-1 flex-row items-center gap-1.5">
+          <Ionicons name="time-outline" size={12} color={colors.primary} />
+          <Text className="text-xs font-semibold text-primary">~{recommendation.estimated_duration_minutes} menit</Text>
+        </View>
       </View>
       
-      <Text className="text-lg font-bold text-gray-900 mb-2 leading-tight">
+      <Text className="mb-2 text-lg font-semibold leading-tight text-neutral-950">
         {recommendation.title}
       </Text>
       
-      <Text className="text-sm text-gray-600 leading-relaxed mb-3">
+      <Text className="mb-4 text-sm leading-6 text-neutral-700">
         {recommendation.description}
       </Text>
       
-      <View className="flex-row items-center mt-2 pt-3 border-t border-gray-50">
-        <View className="w-2 h-2 rounded-full mr-2" style={{ backgroundColor: getPriorityColor(priorityLabel) }} />
-        <Text className="text-xs font-medium text-gray-400 uppercase tracking-wider">
-          {getPriorityText(priorityLabel)}
+      <View className="mt-2 flex-row items-center justify-between border-t border-neutral-100 pt-3">
+        <View className="flex-row items-center">
+          <View className="w-2 h-2 rounded-full mr-2" style={{ backgroundColor: getPriorityColor(priorityLabel) }} />
+          <Text className="text-xs font-medium text-neutral-400 uppercase tracking-wider">
+            {getPriorityText(priorityLabel)}
+          </Text>
+        </View>
+        <Text className="text-xs font-medium text-neutral-400 uppercase tracking-wider">
+          Rekomendasi belajar
         </Text>
       </View>
     </Card>
