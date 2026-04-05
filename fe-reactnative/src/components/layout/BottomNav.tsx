@@ -16,15 +16,15 @@ interface MenuItem {
 
 const MENU_ITEMS: MenuItem[] = [
   { href: '/', label: 'Dashboard', icon: 'grid-outline', matchExact: true },
-  { href: '/syllabus/generated', label: 'Syllabus', icon: 'library-outline' },
-  { href: '/syllabus/history', label: 'History', icon: 'time-outline' },
+  { href: '/syllabus/generated', label: 'Kurikulum', icon: 'library-outline' },
+  { href: '/personalize', label: 'Personalisasi', icon: 'sparkles-outline' },
 ];
 
 export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <View className="flex-row bg-white border-t border-gray-200 fixed bottom-0 left-0 right-0 z-50 pb-safe">
+    <View className="fixed bottom-0 left-0 right-0 z-50 flex-row border-t border-neutral-300 bg-surface pb-safe shadow-xs">
       {MENU_ITEMS.map((item) => {
         const isActive = item.matchExact
           ? pathname === item.href
@@ -36,16 +36,16 @@ export function BottomNav() {
 
         return (
           <Link key={item.href as string} href={item.href} asChild>
-            <Pressable className="flex-1 items-center justify-center py-3 gap-1 active:bg-gray-50">
+            <Pressable className="flex-1 items-center justify-center py-3 gap-1 active:bg-neutral-50 min-h-[44px]">
               <Ionicons
                 name={iconName}
                 size={24}
-                color={isActive ? colors.primary : '#9CA3AF'}
+                color={isActive ? colors.primary : colors.textMuted}
               />
               <Text
                 className={clsx(
                   'text-xs font-medium',
-                  isActive ? 'text-primary' : 'text-gray-400'
+                  isActive ? 'text-primary-600' : 'text-neutral-500'
                 )}
               >
                 {item.label}

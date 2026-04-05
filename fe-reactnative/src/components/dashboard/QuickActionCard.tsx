@@ -14,15 +14,16 @@ export function QuickActionCard({ title, description, iconName, onPress, color =
   return (
     <Pressable
       onPress={onPress}
-      className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex-1 min-w-[220px] mb-3 md:mb-0 md:mr-3 active:scale-[0.98] transition-transform"
+      className="flex-1 min-w-[220px] rounded-xl border border-neutral-300 bg-surface p-5 shadow-xs hover:bg-neutral-50 active:bg-neutral-100 active:scale-[0.98]"
     >
-      <View className="flex-row items-center mb-3">
-        <View className="p-2 rounded-full mr-3" style={{ backgroundColor: `${color}15` }}>
-          <Ionicons name={iconName} size={24} color={color} />
+      <View className="mb-4 flex-row items-start justify-between gap-3">
+        <View className="rounded-lg bg-neutral-100 p-3">
+          <Ionicons name={iconName} size={22} color={color} />
         </View>
-        <Text className="text-lg font-bold text-gray-900 flex-1">{title}</Text>
+        <Ionicons name="arrow-forward" size={18} color={colors.textMuted ?? '#94A3B8'} />
       </View>
-      <Text className="text-sm text-gray-500 leading-relaxed">{description}</Text>
+      <Text className="text-lg font-semibold text-neutral-950">{title}</Text>
+      <Text className="mt-2 text-sm leading-6 text-neutral-600">{description}</Text>
     </Pressable>
   );
 }

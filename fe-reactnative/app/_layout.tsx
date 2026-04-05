@@ -1,23 +1,36 @@
 import { useEffect } from 'react';
-import { View, useWindowDimensions } from 'react-native';
+import { View, useWindowDimensions, Platform } from 'react-native';
 import { Redirect, Slot, usePathname } from 'expo-router';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import {
+  useFonts,
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from '@expo-google-fonts/inter';
 import '../global.css';
 import { Sidebar } from '../src/components/layout/Sidebar';
 import { Header } from '../src/components/layout/Header';
 import { BottomNav } from '../src/components/layout/BottomNav';
 import { MobileTopBar } from '../src/components/layout/MobileTopBar';
+import { appQueryClient } from '../src/queryClient';
 import { getMe } from '../src/services/auth';
 import { useAuthStore } from '../src/stores/authStore';
 
-const queryClient = new QueryClient();
-
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
   const pathname = usePathname();
-  const { accessToken, hydrated, hydrate, clearSession, setSession } = useAuthStore();
+  const { accessToken, hydrated, hydrate, clearSession, setSession, user } = useAuthStore();
 
   useEffect(() => {
     if (!hydrated) {
@@ -40,6 +53,7 @@ export default function RootLayout() {
       })
       .catch(() => {
         if (!cancelled) {
+          appQueryClient.clear();
           clearSession();
         }
       });
@@ -50,8 +64,14 @@ export default function RootLayout() {
   }, [accessToken, clearSession, hydrated, setSession]);
 
   const isAuthRoute = pathname === '/login' || pathname === '/register';
+  const isResolvingSession = hydrated && !!accessToken && !user;
 
-  if (!hydrated) {
+  if (!hydrated || isResolvingSession) {
+    return null;
+  }
+
+  // On native, block until fonts are loaded; on web, CSS handles it
+  if (Platform.OS !== 'web' && !fontsLoaded) {
     return null;
   }
 
@@ -65,8 +85,8 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <QueryClientProvider client={queryClient}>
-        <View className={`flex-1 ${isDesktop ? 'flex-row' : 'flex-col'} ${isAuthRoute ? 'bg-white' : 'bg-gray-50'}`}>
+      <QueryClientProvider client={appQueryClient}>
+        <View className={`flex-1 ${isDesktop ? 'flex-row' : 'flex-col'} ${isAuthRoute ? 'bg-surface' : 'bg-neutral-50'}`}>
           {isDesktop && !isAuthRoute ? <Sidebar /> : null}
           <View className="flex-1 flex-col relative">
             {isDesktop && !isAuthRoute ? <Header /> : null}

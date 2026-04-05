@@ -1,12 +1,13 @@
 import { View, Text, ScrollView, RefreshControl, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useDocuments } from '../src/hooks/useDocuments';
 import { useDesignSessionList } from '../src/hooks/useDesignSession';
 import { useSyllabus } from '../src/hooks/useSyllabus';
 import { getErrorMessage } from '../src/services/api';
 import { Card } from '../src/components/ui/Card';
 import { Button } from '../src/components/ui/Button';
+import { AlertBanner } from '../src/components/ui/AlertBanner';
 import { LoadingSpinner } from '../src/components/ui/LoadingSpinner';
+import { PageHeader } from '../src/components/ui/PageHeader';
 import { StatsCard } from '../src/components/dashboard/StatsCard';
 import { QuickActionCard } from '../src/components/dashboard/QuickActionCard';
 import { ActivityItem } from '../src/components/dashboard/ActivityItem';
@@ -15,9 +16,25 @@ import { Ionicons } from '@expo/vector-icons';
 import { useState, useCallback } from 'react';
 import { isFinalizedSyllabus, syllabusTitle } from '../src/utils/syllabus';
 
+function formatWizardStepLabel(step: string) {
+  const labels: Record<string, string> = {
+    uploaded: 'Materi dipilih',
+    summary_ready: 'Ringkasan siap',
+    course_context_set: 'Arah kursus ditetapkan',
+    tlo_options_ready: 'Tujuan akhir siap dipilih',
+    tlo_selected: 'Tujuan akhir dipilih',
+    performance_options_ready: 'Target performa siap dipilih',
+    performance_selected: 'Target performa dipilih',
+    elo_options_ready: 'Modul belajar siap dipilih',
+    elo_selected: 'Modul belajar dipilih',
+    finalized: 'Kurikulum selesai',
+  };
+
+  return labels[step] ?? step.replaceAll('_', ' ');
+}
+
 export default function DashboardScreen() {
   const router = useRouter();
-  const { documents, isLoading: isLoadingDocs, error: documentsError, refetch: refetchDocs } = useDocuments();
   const {
     data: sessions,
     isLoading: isLoadingSessions,
@@ -29,17 +46,17 @@ export default function DashboardScreen() {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
 
-  const isLoading = isLoadingDocs || isLoadingSessions || isLoadingSyllabi;
-  const dashboardError = documentsError ?? sessionsError ?? syllabiError ?? null;
+  const isLoading = isLoadingSessions || isLoadingSyllabi;
+  const dashboardError = sessionsError ?? syllabiError ?? null;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([refetchDocs(), refetchSessions(), refetchSyllabi()]);
+    await Promise.all([refetchSessions(), refetchSyllabi()]);
     setRefreshing(false);
-  }, [refetchDocs, refetchSessions, refetchSyllabi]);
+  }, [refetchSessions, refetchSyllabi]);
 
   const stats = {
-    documents: documents?.length || 0,
+    draftSessions: sessions?.filter((session) => !session.finalized_syllabus_id).length || 0,
     syllabi: syllabi?.length || 0,
     generated: syllabi?.filter((s) => isFinalizedSyllabus(s.status)).length || 0,
   };
@@ -47,14 +64,6 @@ export default function DashboardScreen() {
   const activeSession = sessions?.find((session) => !session.finalized_syllabus_id) ?? null;
 
   const recentActivity = [
-    ...(documents?.map((d) => ({
-      id: d.id,
-      title: d.filename,
-      subtitle: d.file_type.split('/')[1]?.toUpperCase() || 'FILE',
-      date: d.created_at,
-      type: 'document' as const,
-      route: '/documents',
-    })) || []),
     ...(syllabi?.map((s) => ({
       id: s.id,
       title: syllabusTitle(s),
@@ -67,21 +76,21 @@ export default function DashboardScreen() {
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, 5);
 
-  if (isLoading && !documents && !syllabi) {
+  if (isLoading && !syllabi) {
     return <LoadingSpinner fullScreen message="Memuat dasbor..." />;
   }
 
-  if (dashboardError && !documents && !syllabi) {
+  if (dashboardError && !syllabi) {
     return (
       <ScrollView className="flex-1 bg-background px-4 py-6">
         <View className="max-w-4xl mx-auto w-full mt-8">
-          <View className="bg-red-50 border border-red-200 rounded-2xl p-6 gap-4">
+          <View className="bg-red-50 border border-red-200 rounded-xl p-6 gap-4">
             <Text className="text-2xl font-bold text-red-700">Gagal memuat dasbor</Text>
             <Text className="text-red-700">{getErrorMessage(dashboardError, 'Data dasbor belum dapat dimuat saat ini.')}</Text>
             <View className="flex-row flex-wrap gap-3">
               <QuickActionCard
                 title="Coba Lagi"
-                description="Muat ulang dokumen dan silabus terbaru."
+                description="Muat ulang sesi aktif dan silabus terbaru."
                 iconName="refresh"
                 onPress={() => void onRefresh()}
                 color={colors.primary}
@@ -99,87 +108,83 @@ export default function DashboardScreen() {
       showsVerticalScrollIndicator={false}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
-      <View className="mb-8 mt-2 rounded-3xl border border-gray-100 bg-white px-6 py-6 shadow-sm">
-        <View className="flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <View className="flex-1">
-            <Text className="text-xs font-bold uppercase tracking-[0.25em] text-primary">PRIMA Workspace</Text>
-            <Text className="mt-2 text-3xl font-bold text-gray-900 mb-2">Selamat datang, Pengajar!</Text>
-            <Text className="text-gray-500 text-lg">Siap merancang kurikulum, roadmap, dan rekomendasi belajar Anda berikutnya?</Text>
+      <PageHeader
+        eyebrow="Langkah kerja"
+        title="Mulai dari kurikulum, lanjut ke rekomendasi belajar"
+        description="Gunakan dashboard ini untuk memilih langkah berikutnya: mulai kurikulum baru, lanjutkan draf aktif, atau buka kurikulum final untuk personalisasi."
+        actions={(
+          <>
+            <Button title="Buat kurikulum" onPress={() => router.push('/syllabus/create')} />
+            {activeSession ? <Button title="Lanjutkan draf" variant="outline" onPress={() => router.push(`/syllabus/create/${activeSession.id}`)} /> : null}
+            <Button title="Buka personalisasi" variant="outline" onPress={() => router.push('/personalize')} />
+          </>
+        )}
+        aside={(
+          <View className="gap-1">
+            <Text className="text-xs font-semibold uppercase tracking-[0.2em] text-primary-600">Fokus hari ini</Text>
+            <Text className="text-sm text-neutral-600">Buat kurikulum, selesaikan draf, lalu personalisasi hasilnya.</Text>
           </View>
-          <View className="rounded-2xl bg-red-50 px-4 py-3 border border-red-100">
-            <Text className="text-xs font-bold uppercase tracking-[0.2em] text-primary">Active shell</Text>
-            <Text className="mt-1 text-sm text-gray-600">Auth, syllabus, revision, bulk, roadmap, history, and export are now connected in one flow.</Text>
-          </View>
-        </View>
-      </View>
+        )}
+      />
 
       {dashboardError ? (
-        <View className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-          <Text className="font-semibold text-amber-700">Sebagian data dasbor belum terbarui</Text>
-          <Text className="mt-1 text-amber-700">{getErrorMessage(dashboardError, 'Terjadi masalah saat menyegarkan dasbor.')}</Text>
+        <View className="mb-6 mt-6">
+          <AlertBanner
+            variant="warning"
+            title="Sebagian data belum diperbarui"
+            description={getErrorMessage(dashboardError, 'Terjadi masalah saat menyegarkan dashboard.')}
+            action={{ label: 'Muat ulang', onPress: () => void onRefresh() }}
+          />
         </View>
       ) : null}
 
       {activeSession ? (
-        <View className="mb-8">
+        <View className="mb-8 mt-6">
           <Card
-            title="Lanjutkan Sesi Desain"
-            subtitle={activeSession.course_context?.topic ?? 'Progres sesi tersimpan di backend dan siap dilanjutkan.'}
+            title="Lanjutkan draf aktif"
+            subtitle={activeSession.course_context?.topic ?? 'Draf terakhir Anda masih terbuka dan bisa dilanjutkan kapan saja.'}
              action={
-              <Button
-                title="Lanjutkan"
-                size="sm"
-                onPress={() => router.push(`/syllabus/create/${activeSession.id}`)}
-              />
+               <Button
+                 title="Lanjutkan"
+                 size="sm"
+                 onPress={() => router.push(`/syllabus/create/${activeSession.id}`)}
+               />
             }
           >
             <View className="gap-2">
-              <Text className="text-gray-600">
-                Langkah aktif: {activeSession.wizard_step.replaceAll('_', ' ')}
-              </Text>
-              <Text className="text-gray-500">
+              <Text className="text-neutral-700">Tahap saat ini: {formatWizardStepLabel(activeSession.wizard_step)}</Text>
+              <Text className="text-neutral-500">
                 Diperbarui {new Date(activeSession.updated_at).toLocaleDateString('id-ID')} • {activeSession.document_ids.length} dokumen sumber
               </Text>
+              <View className="mt-2 rounded-xl bg-primary-50 px-4 py-3">
+                <Text className="text-xs font-semibold uppercase tracking-[0.2em] text-primary-600">Langkah berikutnya</Text>
+                <Text className="mt-1 text-sm text-neutral-700">Buka draf ini untuk menyelesaikan tahap aktif lalu finalkan kurikulum sebelum membuat personalisasi.</Text>
+              </View>
             </View>
           </Card>
         </View>
       ) : null}
 
-      <View className="flex-row flex-wrap gap-4 mb-8">
+      <View className="mb-8 flex-row flex-wrap gap-4">
         <View style={{ flex: isDesktop ? 1 : undefined, width: isDesktop ? undefined : '47%' }}>
-          <StatsCard
-            title="Dokumen"
-            value={stats.documents}
-            iconName="document-text"
-            color={colors.info}
-          />
+          <StatsCard title="Draft aktif" value={stats.draftSessions} iconName="layers" color={colors.warning} />
         </View>
         <View style={{ flex: isDesktop ? 1 : undefined, width: isDesktop ? undefined : '47%' }}>
-          <StatsCard
-            title="Silabus"
-            value={stats.syllabi}
-            iconName="school"
-            color={colors.primary}
-          />
+          <StatsCard title="Kurikulum" value={stats.syllabi} iconName="school" color={colors.primary} />
         </View>
         <View style={{ flex: isDesktop ? 1 : undefined, width: isDesktop ? undefined : '47%' }}>
-          <StatsCard
-            title="Dibuat"
-            value={stats.generated}
-            iconName="checkmark-circle"
-            color={colors.success}
-          />
+          <StatsCard title="Siap dipakai" value={stats.generated} iconName="checkmark-circle" color={colors.success} />
         </View>
       </View>
 
       <View className="mb-8">
-        <Text className="text-xl font-bold text-gray-900 mb-4">Aksi Cepat</Text>
+        <Text className="mb-4 text-xl font-semibold text-neutral-950">Lanjutkan dari sini</Text>
         <View style={{ flexDirection: isDesktop ? 'row' : 'column', gap: 16 }}>
           {activeSession ? (
             <View style={{ flex: isDesktop ? 1 : undefined }}>
               <QuickActionCard
-                title="Lanjutkan Sesi"
-                description="Teruskan create flow yang belum selesai dari langkah terakhir."
+                title="Lanjutkan draf"
+                description="Buka tahap terakhir yang belum selesai lalu teruskan penyusunan kurikulum."
                 iconName="play"
                 onPress={() => router.push(`/syllabus/create/${activeSession.id}`)}
                 color={colors.warning}
@@ -188,47 +193,29 @@ export default function DashboardScreen() {
           ) : null}
           <View style={{ flex: isDesktop ? 1 : undefined }}>
               <QuickActionCard
-                title="Upload Dokumen"
-                description="Masuk ke create flow untuk unggah atau pilih dokumen siap pakai."
+                title="Buat kurikulum"
+                description="Unggah materi, pilih opsi terbaik, lalu finalkan kurikulum baru."
                 iconName="cloud-upload"
-                onPress={() => router.push('/syllabus/create')}
-                color={colors.info}
-              />
-            </View>
-          <View style={{ flex: isDesktop ? 1 : undefined }}>
-              <QuickActionCard
-                title="Buat Silabus"
-                description="Buat silabus baru dari dokumen Anda."
-                iconName="flash"
                 onPress={() => router.push('/syllabus/create')}
                 color={colors.primary}
               />
             </View>
           <View style={{ flex: isDesktop ? 1 : undefined }}>
               <QuickActionCard
-                title="Career Roadmap"
-                description="Bangun roadmap pengembangan karier peserta dari syllabus final dan competency gap." 
-                iconName="git-network-outline"
-                onPress={() => router.push('/syllabus/roadmap')}
-                color={colors.aiAccent}
-              />
-            </View>
-          <View style={{ flex: isDesktop ? 1 : undefined }}>
-              <QuickActionCard
-                title="Silabus Saya"
-                description="Lihat syllabus final yang siap direvisi dan diekspor."
+                title="Buka kurikulum"
+                description="Lihat kurikulum final yang siap dipakai sebagai dasar personalisasi."
                 iconName="library"
                 onPress={() => router.push('/syllabus/generated')}
-                color={colors.secondary}
-                />
-            </View>
-          <View style={{ flex: isDesktop ? 1 : undefined }}>
-              <QuickActionCard
-                title="Riwayat & CSV"
-                description="Lihat jejak aktivitas syllabus dan export CSV owner-scoped."
-                iconName="time"
-                onPress={() => router.push('/syllabus/history')}
                 color={colors.info}
+              />
+            </View>
+            <View style={{ flex: isDesktop ? 1 : undefined }}>
+              <QuickActionCard
+                title="Buat rekomendasi"
+                description="Pilih kurikulum final lalu lanjutkan ke single-user atau multi-user."
+                iconName="library"
+                onPress={() => router.push('/personalize')}
+                color={colors.textMuted ?? '#94A3B8'}
               />
             </View>
         </View>
@@ -236,13 +223,13 @@ export default function DashboardScreen() {
 
       <View className="mb-8">
         <View className="flex-row justify-between items-center mb-4">
-          <Text className="text-xl font-bold text-gray-900">Aktivitas Terbaru</Text>
-          <Text onPress={() => router.push('/syllabus/generated')} className="text-primary font-medium">
-            Lihat Semua
+          <Text className="text-xl font-semibold text-neutral-950">Kurikulum terbaru</Text>
+          <Text onPress={() => router.push('/syllabus/generated')} className="font-medium text-primary-600">
+            Lihat semua
           </Text>
         </View>
 
-        <View className="bg-white rounded-xl shadow-sm border border-gray-100 p-2">
+        <View className="rounded-2xl border border-neutral-200 bg-surface p-2 shadow-sm">
           {recentActivity.length > 0 ? (
             recentActivity.map((item) => (
               <ActivityItem
@@ -255,9 +242,9 @@ export default function DashboardScreen() {
               />
             ))
           ) : (
-            <View className="p-8 items-center">
-              <Ionicons name="file-tray-outline" size={48} color={colors.textSecondary} />
-              <Text className="text-gray-500 mt-2 text-center">Belum ada aktivitas.</Text>
+            <View className="items-center p-8">
+              <Ionicons name="file-tray-outline" size={48} color={colors.textMuted ?? '#94A3B8'} />
+              <Text className="mt-3 text-center text-sm text-neutral-500">Belum ada kurikulum yang dibuat. Mulai dari tombol buat kurikulum.</Text>
             </View>
           )}
         </View>

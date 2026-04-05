@@ -43,14 +43,3 @@ export function setAccessToken(token: string | null): void {
     // ignore storage failures and keep in-memory token only
   }
 }
-
-export function getAuthenticatedUrl(path: string): string {
-  const token = getAccessToken();
-  if (!token) {
-    return path;
-  }
-
-  const url = new URL(path, typeof window !== 'undefined' ? window.location.origin : 'http://localhost');
-  url.searchParams.set('access_token', token);
-  return url.toString();
-}

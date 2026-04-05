@@ -13,22 +13,21 @@ interface ActivityItemProps {
 export function ActivityItem({ title, subtitle, date, type, onPress }: ActivityItemProps) {
   const iconName = type === 'document' ? 'document-text-outline' : 'school-outline';
   const iconColor = type === 'document' ? colors.info : colors.primary;
-  const bg = type === 'document' ? 'bg-blue-50' : 'bg-red-50';
 
   return (
     <Pressable
       onPress={onPress}
-      className="flex-row items-center py-4 border-b border-gray-100 active:bg-gray-50 px-2 rounded-lg"
+      className="flex-row items-center rounded-xl border border-transparent px-3 py-4 hover:bg-neutral-50 active:bg-neutral-100"
     >
-      <View className={`p-3 rounded-lg mr-4 ${bg}`}>
+      <View className="mr-4 rounded-lg bg-neutral-100 p-3">
         <Ionicons name={iconName} size={20} color={iconColor} />
       </View>
       <View className="flex-1">
-        <Text className="font-semibold text-gray-900 text-base" numberOfLines={1}>{title}</Text>
-        <Text className="text-sm text-gray-500 mt-0.5" numberOfLines={1}>{subtitle}</Text>
+        <Text className="text-base font-semibold text-neutral-950" numberOfLines={1}>{title}</Text>
+        <Text className="mt-1 text-sm text-neutral-600" numberOfLines={1}>{subtitle}</Text>
       </View>
-      <Text className="text-xs text-gray-400 font-medium">{date}</Text>
-      <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} className="ml-2" />
+      <Text className="text-xs font-medium text-neutral-600">{date}</Text>
+      <Ionicons name="chevron-forward" size={16} color={colors.textMuted ?? '#94A3B8'} className="ml-2" />
     </Pressable>
   );
 }

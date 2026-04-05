@@ -12,9 +12,9 @@ interface StatsCardProps {
 
 export function StatsCard({ title, value, iconName, color = colors.primary, trend }: StatsCardProps) {
   return (
-    <View className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex-1 min-w-[150px] mx-1">
-      <View className="flex-row justify-between items-start mb-2">
-        <View className="p-2 rounded-lg" style={{ backgroundColor: `${color}15` }}>
+    <View className="min-w-[150px] flex-1 rounded-xl border border-neutral-300 bg-surface p-5 shadow-sm">
+      <View className="mb-3 flex-row items-start justify-between">
+        <View className="rounded-lg bg-neutral-100 p-3">
           <Ionicons name={iconName} size={20} color={color} />
         </View>
         {trend && (
@@ -23,8 +23,8 @@ export function StatsCard({ title, value, iconName, color = colors.primary, tren
           </Text>
         )}
       </View>
-      <Text className="text-2xl font-bold text-gray-900 mb-1">{value}</Text>
-      <Text className="text-sm text-gray-500 font-medium">{title}</Text>
+      <Text className="mb-1 text-3xl font-bold text-neutral-950">{value}</Text>
+      <Text className="text-sm font-medium text-neutral-600">{title}</Text>
     </View>
   );
 }
