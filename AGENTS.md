@@ -1,9 +1,11 @@
-# AGENTS.md - MyDigiLearn
+# AGENTS.md - PRIMA
 
 ## Project identity
-- MyDigiLearn is Telkom Athon #10 Group 5's AI-assisted curriculum design platform for educators.
+- PRIMA stands for `Personalized Responsive Intelligent Micro-Learning Assistant`.
+- PRIMA is Telkom Athon #10 Group 5's AI-assisted curriculum design platform for educators.
 - Primary target is desktop web via Expo Router / React Native Web, with the same frontend codebase also supporting mobile Expo entry points.
-- The user-facing product shell now centers on `Syllabus/Create`, `Syllabus/Generated`, revision, and export, while `design_sessions` remains the backend wizard engine behind compatibility aliases.
+- The user-facing product shell now centers on an authenticated workspace with Dashboard, `Syllabus/Create`, `Syllabus/Generated`, syllabus detail, and Personalization (single-user + multi-user).
+- `design_sessions` and `documents` remain internal plumbing for the syllabus-create flow, not separate user-facing product areas.
 
 ## Authority order
 When sources disagree, trust them in this order:
@@ -19,15 +21,15 @@ If a nested `AGENTS.md` disagrees with the current code or `.context/`, treat it
 - Monorepo with `be-fastapi/` backend and `fe-reactnative/` frontend.
 - Backend entry point: `be-fastapi/app/main.py`.
 - Frontend shell entry: `fe-reactnative/app/_layout.tsx`.
-- Current backend routed features: `documents`, `design_sessions`, `syllabus`, `personalize`, `chat`, `export`.
-- Current user-facing frontend route areas center on `syllabus/create`, `syllabus/generated`, `syllabus/[id]`, `syllabus/[id]/revision`, and `syllabus/[id]/export`, with compatibility aliases still re-exporting underlying `design-session` and legacy screens.
+- Current backend routed features: `auth`, `documents`, `design_sessions`, `syllabus`, `personalize`.
+- Current user-facing frontend route areas center on authenticated `/`, `syllabus/create`, `syllabus/generated`, `syllabus/[id]`, `personalize`, `personalize/[syllabusId]`, and `personalize/[syllabusId]/bulk`.
 - Root `server.py` is a sensitive SSH helper and not part of normal app architecture.
 
 ## Key product rules
 - Prefer the `design_sessions` contract for new syllabus-design work, even when the frontend shell is framed as `Syllabus/Create`.
-- Treat the backend as the source of truth for wizard step state, revision application, and downstream resets.
-- Use the canonical DOCX syllabus download route when working with finalized exports.
-- Keep legacy syllabus-generation paths and old route aliases only when compatibility work requires them.
+- Treat authenticated owner context as part of the current contract for protected flows.
+- Treat the backend as the source of truth for wizard step state, syllabus finalization, revision application, and personalization inputs.
+- Do not reintroduce removed roadmap/history/chat/export surfaces without explicit scope expansion.
 
 ## Locked technology baseline
 
@@ -79,16 +81,16 @@ There is currently no repo-evident frontend `lint`, dedicated unit-test, `typech
 
 ## Repository-specific quirks
 - `.gitignore` historically ignored `AGENTS.md` even though the file is tracked. Keep that contradiction fixed.
-- Frontend API base URL can be overridden by `window.__MYDIGILEARN_API_URL__`, the `apiBaseUrl` query param, `localStorage['mydigilearn.apiBaseUrl']`, `EXPO_PUBLIC_API_URL`, or a browser-derived `/api/v1` fallback.
+- PRIMA is the canonical product name, but frontend API base URL overrides still use legacy keys: `window.__MYDIGILEARN_API_URL__`, the `apiBaseUrl` query param, `localStorage['mydigilearn.apiBaseUrl']`, `EXPO_PUBLIC_API_URL`, or a browser-derived `/api/v1` fallback.
 - Exported web builds may need a runtime API override instead of relying only on baked `EXPO_PUBLIC_API_URL`; verify the active origin and override path during local/prod-like testing.
 - Backend CORS is controlled by `CORS_ALLOWED_ORIGINS`; custom local frontend ports require an explicit allowlist update.
 - `Syllabus/Create` currently re-exports the underlying `design-session` implementation, so route naming and implementation paths do not line up one-to-one yet.
-- Runtime DOCX export is driven by `be-fastapi/app/features/export/templates/syllabus_template.docx`; historical `$placeholder` evidence from old DOCX assets is not the active contract.
 - `alembic upgrade head` currently depends on merge revision `8f1629c83c67`, then applies `c9f3f2788f8a_add_finalized_syllabus_snapshot_fields`.
 - Backend config currently uses Azure OpenAI API version `2024-02-01` and embedding dimensions `3072`.
+- Backend auth is implemented with required `SECRET_KEY`, seed-user bootstrap disabled by default, and owner-scoped bearer-token flows.
 - Production Docker now uses `docker-compose.prod.yml` with `db`, `backend`, `frontend`, and nginx `proxy`; only the proxy is publicly published by default.
 - No repo-level CI workflow was found.
-- Auth/authz is not clearly implemented in the current repo; never assume production-grade security guarantees.
+- `be-fastapi/app/config.py` requires explicit seed-user opt-in (`ENABLE_SEED_USER=true`) plus complete credentials before bootstrap runs.
 
 ## Steering-doc maintenance
 - Update `.context/` first whenever commands, architecture, testing workflow, security posture, or durable repo quirks change.

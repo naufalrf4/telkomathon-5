@@ -1,6 +1,17 @@
 auth:
-  status: no verified auth/authz implementation found in current repo scan
-  implication: treat the app as an internal or competition-stage system and do not invent auth guarantees
+  status: verified bearer-token auth flow with register, login, /me, and owner-scoped route protection is present in the current repo
+  implementation:
+    backend:
+      - be-fastapi/app/features/auth/router.py
+      - be-fastapi/app/features/auth/dependencies.py
+      - be-fastapi/app/features/auth/service.py
+    frontend:
+      - fe-reactnative/app/login.tsx
+      - fe-reactnative/app/register.tsx
+      - fe-reactnative/src/stores/authStore.ts
+  limitations:
+    - No repo evidence of RBAC, password reset, email verification, SSO, or multi-tenant isolation was found.
+    - Treat the current auth posture as authenticated owner scoping, not as proof of production-grade public security.
 
 secrets:
   required_env:
@@ -9,6 +20,7 @@ secrets:
     - AZURE_OPENAI_ENDPOINT
     - AZURE_OPENAI_CHAT_DEPLOYMENT
     - AZURE_OPENAI_EMBEDDING_DEPLOYMENT
+    - SECRET_KEY
   production_env_files:
     - .env.prod.example
     - .env.prod (local/runtime only, ignored)
@@ -16,6 +28,7 @@ secrets:
     - Keep secrets in `.env` files or deployment secret stores only.
     - Never hardcode secrets into committed application code.
     - Treat `server.py` as a sensitive local helper because it contains deployment credentials.
+    - Backend config currently includes seed-user defaults in `be-fastapi/app/config.py`; treat those values as bootstrap-only repo defaults and override them for any real deployment.
 
 data_sensitivity:
   categories:
@@ -37,6 +50,7 @@ api_surface:
       - localStorage['mydigilearn.apiBaseUrl']
       - EXPO_PUBLIC_API_URL
       - browser-derived relative /api/v1 fallback
+    note: PRIMA is the product name, but the current frontend runtime override hooks still use legacy `MYDIGILEARN` naming in code.
   cors:
     source: be-fastapi/app/config.py
     default_origins:
@@ -61,6 +75,7 @@ deployment_surface:
     note: Postgres is intentionally not published in the prod compose file.
 
 security_requirements:
+  - Preserve authenticated owner checks on protected feature routers.
   - Preserve backend-owned validation for wizard transitions and explicit revision mutations.
   - Keep runtime API base overrides limited to trusted local or deployment-controlled configuration.
   - Keep sensitive helper files and ignored local env files out of normal implementation scope.

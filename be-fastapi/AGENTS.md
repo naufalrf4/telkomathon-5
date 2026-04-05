@@ -1,8 +1,8 @@
 # AGENTS.md - Backend (FastAPI)
 
 ## Identity
-- Async FastAPI backend for MyDigiLearn.
-- Owns document ingest, stateful `design_sessions` wizard state, finalized syllabus persistence, revision application, personalization inputs, chat suggestion history, and DOCX export.
+- Async FastAPI backend for PRIMA (`Personalized Responsive Intelligent Micro-Learning Assistant`).
+- Owns auth, document ingest, stateful `design_sessions` wizard state, finalized syllabus persistence, revision application, and personalization inputs.
 - The backend is the source of truth for wizard progression, downstream resets, and finalized syllabus mutation.
 
 ## Stack
@@ -14,7 +14,6 @@
 - Pydantic v2 + pydantic-settings
 - Azure OpenAI via `openai`
 - Parsing/OCR: pdfplumber, python-docx, python-pptx, pdf2image, pytesseract
-- Export: `docxtpl` for DOCX and WeasyPrint/Jinja2 for PDF support in service code
 - Tooling: Ruff, mypy, pytest, pytest-asyncio
 
 ## Canonical commands
@@ -27,40 +26,35 @@
 - Migrate: `uv run python -m alembic upgrade head`
 
 ## Feature map
+- `app/features/auth/`: register, login, token decoding, and current-user dependencies
 - `app/features/documents/`: upload, parse, chunk, embed, and list source documents
 - `app/features/design_sessions/`: backend-owned wizard lifecycle and finalization
-- `app/features/syllabus/`: legacy generate flow, finalized syllabus read APIs, and explicit revision apply
+- `app/features/syllabus/`: finalized syllabus read APIs and explicit revision apply
 - `app/features/personalize/`: downstream gap/personalization flows
-- `app/features/chat/`: revision suggestion chat history + SSE suggestion stream
-- `app/features/export/`: canonical DOCX rendering and supporting export logic
 - `app/ai/`: embeddings, chat calls, prompts, hybrid retrieval
 - `app/utils/`: chunking, OCR, and parser utilities
 
 ## Current API truths
 - Namespace: `/api/v1`
+- Auth endpoints live under `/api/v1/auth/*`
 - Canonical wizard endpoints live under `/api/v1/design-sessions/*`
 - Finalized syllabus endpoints live under `/api/v1/syllabi/*`
 - Explicit revision apply endpoint: `POST /api/v1/syllabi/{id}/apply-revision`
-- Canonical DOCX download endpoint: `GET /api/v1/syllabi/{id}/download.docx`
-- Legacy `POST /api/v1/syllabi/generate` still exists for compatibility/fallback and now commits before returning `syllabus_id`
+- Personalization endpoints live under `/api/v1/personalize/{id}` and `/api/v1/personalize/{id}/bulk`
 
 ## Implementation rules
 - Keep routers thin; put business logic in feature services.
+- Preserve `get_current_user`-based owner scoping on protected routes.
 - Do not bypass backend validation for wizard steps or revision application.
-- Finalized syllabus data must remain the long-lived source of truth for revision and export.
-- When export fields are needed later, prefer snapshotting them into finalized syllabus data instead of reconstructing from transient wizard state.
+- Finalized syllabus data must remain the long-lived source of truth for revision and personalization.
 - Treat `design_sessions` as authoritative for reset rules when earlier wizard decisions change.
-
-## Export rules
-- The active runtime template is `app/features/export/templates/syllabus_template.docx`.
-- DOCX export uses `docxtpl`; do not reintroduce raw `$placeholder` replacement logic.
-- Sanitization happens in both finalization snapshot creation and export-time normalization; preserve both layers.
-- Keep the public route `download.docx` stable even if render internals change.
+- Personalization failures must surface as API errors; do not reintroduce silent fallback-success behavior.
 
 ## Reliability quirks
 - Document ingest now degrades safely with zero-vector embeddings when embedding generation fails; do not remove that fallback casually.
 - Hybrid retrieval uses SQLAlchemy expanding bind params for `doc_ids`; avoid asyncpg-incompatible raw `ANY(:doc_ids::uuid[])` patterns.
-- Empty-environment audits already exposed real persistence/export issues; prefer regression tests when touching ingest, legacy generate, revision apply, or export.
+- Azure client now uses explicit timeout/retry settings and finish-reason validation; keep failures explicit.
+- Prefer regression tests when touching ingest, design-session option generation, revision apply, or personalization normalization.
 
 ## Migration rules
 - Every model change requires an Alembic migration.
@@ -70,11 +64,11 @@
 ## Testing focus
 - `tests/features/test_design_sessions_service.py`
 - `tests/features/test_documents_service.py`
-- `tests/features/test_syllabus_generator.py`
 - `tests/features/test_syllabus_service.py`
-- `tests/features/test_export_service.py`
+- `tests/features/test_personalize_service.py`
 
 ## Security posture
-- No verified auth/authz implementation; do not assume public-safe behavior.
+- Verified bearer-token auth and current-user dependencies exist, but broader hardening such as RBAC, password reset, or public-safe guarantees is not repo-evident.
 - Secrets come from env files/settings only.
+- `app/config.py` requires `SECRET_KEY` and only bootstraps a seed user when `ENABLE_SEED_USER=true` and all seed fields are set.
 - `server.py` is sensitive and outside normal backend implementation scope.

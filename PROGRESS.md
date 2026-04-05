@@ -72,3 +72,23 @@
   - Nested steering docs had drifted much further than root docs: backend notes still framed export around older PDF-first assumptions, while frontend notes still described pre-refactor routes, tools, and testing setup.
   - The repo now has a production-style deployment baseline (`docker-compose.prod.yml`, frontend nginx image, reverse proxy, `prod-up.sh` / `prod-down.sh`) that future agents should treat as the canonical server rollout starting point.
   - The verified frontend script surface now includes `npm run e2e`, while the backend local dev command still needs a Git Bash fallback through `uv run python -m uvicorn ...` on Windows shells.
+
+## 2026-04-01 - PRIMA identity and auth-flow steering refresh
+- Mode: refresh
+- Status: completed
+- Files updated: `.context/base/overview.md`, `.context/base/architecture.md`, `.context/base/requirements.yaml`, `.context/base/tech-stack.yaml`, `.context/base/development-plan.yaml`, `.context/base/security.yaml`, `AGENTS.md`, `be-fastapi/AGENTS.md`, `fe-reactnative/AGENTS.md`, `PROGRESS.md`
+- Key discoveries:
+  - Runtime-facing repo evidence consistently brands the product as PRIMA, with the user clarifying the expansion as `Personalized Responsive Intelligent Micro-Learning Assistant`; the old MyDigiLearn label had become steering-doc drift only.
+  - The repo now contains verified bearer-token auth plus owner-scoped protection across most routed features, so security/docs needed to move from “no verified auth” to a narrower statement about missing hardening beyond the current owner-scoped flow.
+  - Finalized-syllabus tooling has expanded beyond revision/export to include owner history, module decomposition, bulk recommendation, and career roadmap flows that future agents should treat as part of the active authenticated shell.
+  - Frontend API override hooks still use legacy `MYDIGILEARN` naming in code (`__MYDIGILEARN_API_URL__`, `mydigilearn.apiBaseUrl`), so docs now preserve that quirk explicitly instead of silently “renaming” runtime behavior.
+
+## 2026-04-01 - Frontend legacy generation cleanup
+- Mode: implementation
+- Status: completed
+- Files updated: `fe-reactnative/src/components/layout/Header.tsx`, `PROGRESS.md`
+- Files removed: `fe-reactnative/app/syllabus/generate.tsx`, `fe-reactnative/src/components/syllabus/GenerationForm.tsx`, `fe-reactnative/src/components/syllabus/GenerationTerminal.tsx`
+- Key discoveries:
+  - `app/syllabus/generate.tsx` was an unused legacy redirect to `/design-session/new`, while the active create entry already lives at `/syllabus/create`.
+  - `GenerationForm.tsx` and `GenerationTerminal.tsx` were leftover generation-era UI components with no remaining imports or runtime references in the frontend.
+  - The old `/documents/*` screens and top-level compatibility routes were left intact because they still have repo-evident references or documented compatibility intent.

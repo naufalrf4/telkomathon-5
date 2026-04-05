@@ -39,20 +39,51 @@ functional_requirements:
       - docker-compose.prod.yml
       - scripts/prod-up.sh
       - proxy/nginx.conf
+  - id: FR8
+    requirement: Support user registration, login, bearer-token sessions, and authenticated owner-scoped access to protected flows.
+    evidence:
+      - be-fastapi/app/features/auth/router.py
+      - be-fastapi/app/features/auth/dependencies.py
+      - fe-reactnative/app/login.tsx
+      - fe-reactnative/app/register.tsx
+      - fe-reactnative/src/stores/authStore.ts
+  - id: FR9
+    requirement: Support owner history, revision history, module decomposition, and CSV export for finalized syllabi.
+    evidence:
+      - be-fastapi/app/features/history/router.py
+      - be-fastapi/app/features/history/service.py
+      - fe-reactnative/app/syllabus/history.tsx
+      - fe-reactnative/app/modules/[syllabusId].tsx
+  - id: FR10
+    requirement: Support career roadmap generation from finalized syllabus outcomes and participant role targets.
+    evidence:
+      - be-fastapi/app/features/roadmap/router.py
+      - be-fastapi/app/features/roadmap/service.py
+      - fe-reactnative/app/roadmap/[syllabusId].tsx
+      - fe-reactnative/app/syllabus/roadmap.tsx
+  - id: FR11
+    requirement: Support bulk personalization recommendations and batch result retrieval for multiple participants per syllabus.
+    evidence:
+      - be-fastapi/app/features/personalize/router.py
+      - be-fastapi/app/features/personalize/service.py
+      - fe-reactnative/app/bulk/[syllabusId].tsx
+      - fe-reactnative/app/syllabus/[id]/bulk.tsx
 
 quality_attributes:
   - Backend state transitions and revision mutations must be deterministic and validated server-side.
+  - Protected flows should remain owner-scoped through backend authentication dependencies.
   - Export output should render from finalized syllabus data without leaking stale placeholders or transient wizard-only context.
   - The web experience must remain usable in desktop and mobile layouts from the shared Expo shell.
   - Steering docs must track repo truth for local dev, production deployment, and user-facing route shells.
 
 non_goals:
-  - Building a production-grade auth or tenancy system without explicit repo evidence
+  - Assuming production-grade auth hardening, RBAC, or multi-tenant isolation beyond the repo-evident owner-scoped token flow
   - Replacing the current guided flow with a pure one-shot generation-only path
   - Treating sensitive deployment helpers as ordinary application modules
 
 forbidden_changes:
   - Do not hardcode secrets or credentials in committed application code.
   - Do not bypass backend wizard-step or revision validation in the frontend.
+  - Do not bypass authenticated owner checks on protected syllabus, personalization, roadmap, history, or export routes.
   - Do not invent canonical commands, CI steps, or release workflows that are not repo-evident.
   - Do not treat old `AI Space Silabus.docx` placeholder evidence as the active runtime template contract when `syllabus_template.docx` is the real export asset.

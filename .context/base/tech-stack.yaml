@@ -1,5 +1,5 @@
 project:
-  name: MyDigiLearn
+  name: PRIMA
   monorepo: true
   version_source:
     backend: be-fastapi/pyproject.toml
