@@ -2,21 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any, ClassVar, cast
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-
-
-class SyllabusGenerateRequest(BaseModel):
-    topic: str
-    target_level: int
-    doc_ids: list[uuid.UUID]
-    additional_context: str = ""
-
-    @field_validator("target_level")
-    @classmethod
-    def validate_level(cls, v: int) -> int:
-        if v < 1 or v > 5:
-            raise ValueError("target_level must be between 1 and 5")
-        return v
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ELO(BaseModel):

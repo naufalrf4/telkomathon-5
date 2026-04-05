@@ -20,6 +20,9 @@ class SourceSummaryResponse(BaseModel):
     summary: str
     key_points: list[str]
     company_profile_focus: list[str] = []
+    company_name: str | None = None
+    company_profile_summary: str | None = None
+    company_profile_confidence: str | None = None
 
 
 class CourseContextRequest(BaseModel):

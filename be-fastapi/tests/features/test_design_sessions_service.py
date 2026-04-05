@@ -36,19 +36,63 @@ class FakeAsyncSession:
 
 
 class FakeScalarResult:
-    def __init__(self, items: list[DesignSession]) -> None:
-        self._items: list[DesignSession] = items
+    def __init__(self, items: list[object]) -> None:
+        self._items = items
 
-    def all(self) -> list[DesignSession]:
+    def all(self) -> list[object]:
         return self._items
 
 
 class FakeExecuteResult:
-    def __init__(self, items: list[DesignSession]) -> None:
-        self._items: list[DesignSession] = items
+    def __init__(self, items: list[object]) -> None:
+        self._items = items
 
     def scalars(self) -> FakeScalarResult:
         return FakeScalarResult(self._items)
+
+    def scalar_one_or_none(self) -> DesignSession | Document | None:
+        value = self._items[0] if self._items else None
+        if isinstance(value, (DesignSession, Document)):
+            return value
+        return None
+
+
+@pytest.mark.asyncio
+async def test_create_session_prefills_company_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    document_id = uuid4()
+    document = Document(
+        id=document_id,
+        filename="profil-perusahaan.docx",
+        doc_type="company-profile",
+        file_format="docx",
+        content_text="PT Demo bergerak di layanan digital dan konektivitas. Fokus utama perusahaan adalah peningkatan kapabilitas talenta organisasi.",
+        file_path="uploads/profil-perusahaan.docx",
+        status="ready",
+        metadata_={
+            "extraction": {
+                "company_name": "PT Demo",
+                "company_profile_summary": "PT Demo bergerak di layanan digital dan konektivitas. Fokus utama tahun berjalan adalah peningkatan kapabilitas talenta organisasi.",
+                "confidence": "high",
+            }
+        },
+    )
+
+    class SessionCreateDB(FakeAsyncSession):
+        async def execute(self, _query: object) -> FakeExecuteResult:
+            return FakeExecuteResult([document])
+
+    service = DesignSessionService(SessionCreateDB())
+
+    created = await service.create_session(
+        type("Request", (), {"document_ids": [document_id]})(),
+    )
+
+    assert created.wizard_step == "summary_ready"
+    assert created.source_summary is not None
+    assert created.source_summary["company_name"] == "PT Demo"
+    assert created.course_context is not None
+    assert created.course_context["client_company_name"] == "PT Demo"
+    assert str(created.course_context["commercial_overview"]).startswith("PT Demo bergerak")
 
 
 @pytest.mark.asyncio
@@ -255,18 +299,26 @@ async def test_generate_elo_options_passes_previous_options_for_regeneration(
 
 
 def test_fallback_elo_options_support_regeneration_variant() -> None:
-    initial = fallback_elo_options("Machine Learning Level 1", "Performance")
-    regenerated = fallback_elo_options(
-        "Machine Learning Level 1",
-        "Performance",
-        regenerate=True,
-        previous_elo_texts=[item["elo"] for item in initial],
+    initial = cast(
+        list[dict[str, str]], fallback_elo_options("Machine Learning Level 1", "Performance")
     )
-    regenerated_again = fallback_elo_options(
-        "Machine Learning Level 1",
-        "Performance",
-        regenerate=True,
-        previous_elo_texts=[item["elo"] for item in regenerated],
+    regenerated = cast(
+        list[dict[str, str]],
+        fallback_elo_options(
+            "Machine Learning Level 1",
+            "Performance",
+            regenerate=True,
+            previous_elo_texts=[item["elo"] for item in initial],
+        ),
+    )
+    regenerated_again = cast(
+        list[dict[str, str]],
+        fallback_elo_options(
+            "Machine Learning Level 1",
+            "Performance",
+            regenerate=True,
+            previous_elo_texts=[item["elo"] for item in regenerated],
+        ),
     )
 
     assert len(initial) == 5

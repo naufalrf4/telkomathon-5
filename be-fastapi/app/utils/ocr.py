@@ -7,7 +7,6 @@ async def extract_text_with_ocr(file_path: str) -> str:
     try:
         import pytesseract
         from pdf2image import convert_from_path
-        from PIL import Image
 
         images = await asyncio.to_thread(
             convert_from_path,

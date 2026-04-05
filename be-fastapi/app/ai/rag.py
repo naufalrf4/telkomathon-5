@@ -1,13 +1,14 @@
+import logging
 import uuid
 from typing import Any
 
 from sqlalchemy import bindparam, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.constants import RETRIEVAL_SCORE_THRESHOLD
 from app.ai.embeddings import generate_embedding
-from app.config import settings
 
-SIMILARITY_THRESHOLD = settings.SIMILARITY_THRESHOLD
+logger = logging.getLogger(__name__)
 
 
 async def retrieve_relevant_chunks(
@@ -19,7 +20,12 @@ async def retrieve_relevant_chunks(
     doc_id_strings = [str(d) for d in doc_ids]
     try:
         query_embedding = await generate_embedding(query)
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "Embedding generation failed during retrieval; falling back to text-only search",
+            extra={"doc_count": len(doc_id_strings), "query": query[:120]},
+            exc_info=exc,
+        )
         query_embedding = None
 
     vector_results: list[dict[str, Any]] = []
@@ -28,12 +34,20 @@ async def retrieve_relevant_chunks(
     fts_results = await _fulltext_search(query, doc_id_strings, db, limit=20)
 
     fused = _reciprocal_rank_fusion([vector_results, fts_results], top_n=top_k)
-    filtered = [r for r in fused if r["score"] >= SIMILARITY_THRESHOLD]
+    filtered = [r for r in fused if r["score"] >= RETRIEVAL_SCORE_THRESHOLD]
     if filtered:
         return filtered
     if fts_results:
+        logger.info(
+            "Hybrid retrieval returned no results above threshold; using full-text fallback",
+            extra={"doc_count": len(doc_id_strings), "fts_results": len(fts_results)},
+        )
         return fts_results[:top_k]
     if vector_results:
+        logger.info(
+            "Hybrid retrieval returned no thresholded or text results; using vector fallback",
+            extra={"doc_count": len(doc_id_strings), "vector_results": len(vector_results)},
+        )
         return vector_results[:top_k]
     return []
 

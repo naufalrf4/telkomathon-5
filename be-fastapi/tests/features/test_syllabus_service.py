@@ -3,8 +3,6 @@ from uuid import uuid4
 
 import pytest
 
-from app.features.chat.models import ChatMessage
-from app.features.history.models import OwnerHistory
 from app.features.syllabus.models import GeneratedSyllabus
 from app.features.syllabus.schemas import (
     ELO,
@@ -24,15 +22,12 @@ class FakeScalarResult:
 
 
 class FakeRevisionSession:
-    def __init__(self, syllabus: GeneratedSyllabus, message: ChatMessage | None) -> None:
+    def __init__(self, syllabus: GeneratedSyllabus) -> None:
         self.syllabus: GeneratedSyllabus = syllabus
-        self.message: ChatMessage | None = message
         self.added: list[object] = []
 
     async def execute(self, statement: object) -> FakeScalarResult:
-        statement_text = str(statement)
-        if "chat_messages" in statement_text:
-            return FakeScalarResult(self.message)
+        _ = statement
         return FakeScalarResult(self.syllabus)
 
     def add(self, _obj: object) -> None:
@@ -47,7 +42,7 @@ class FakeRevisionSession:
 
 
 @pytest.mark.asyncio
-async def test_apply_revision_updates_history_and_marks_chat_message() -> None:
+async def test_apply_revision_updates_revision_history() -> None:
     syllabus_id = uuid4()
     message_id = uuid4()
     syllabus = GeneratedSyllabus(
@@ -90,15 +85,7 @@ async def test_apply_revision_updates_history_and_marks_chat_message() -> None:
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
     )
-    message = ChatMessage(
-        id=message_id,
-        syllabus_id=syllabus_id,
-        role="assistant",
-        content="Saran revisi",
-        revision_applied=None,
-        created_at=datetime.now(UTC),
-    )
-    service = SyllabusService(FakeRevisionSession(syllabus, message))
+    service = SyllabusService(FakeRevisionSession(syllabus))
 
     result = await service.apply_revision(
         syllabus_id,
@@ -173,9 +160,4 @@ async def test_apply_revision_updates_history_and_marks_chat_message() -> None:
         "elos",
         "journey",
     ]
-    assert message.revision_applied is not None
-    assert message.revision_applied["summary"] == "Memperjelas TLO"
-    owner_history_rows = [obj for obj in service.db.added if isinstance(obj, OwnerHistory)]
-    assert len(owner_history_rows) == 1
-    assert owner_history_rows[0].action == "revised"
-    assert owner_history_rows[0].revision_index == 1
+    assert service.db.added == []

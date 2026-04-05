@@ -1,7 +1,4 @@
-from typing import Any
-
 import tiktoken
-
 
 _tokenizer: tiktoken.Encoding | None = None
 
@@ -17,18 +14,16 @@ def chunk_text(
     text: str,
     chunk_size: int = 500,
     overlap: int = 100,
-) -> list[dict[str, Any]]:
+) -> list[dict[str, object]]:
     tokenizer = _get_tokenizer()
     tokens = tokenizer.encode(text)
-    chunks: list[dict[str, Any]] = []
+    chunks: list[dict[str, object]] = []
 
     if not tokens:
         return chunks
 
     step = chunk_size - overlap
-    chunk_index = 0
-
-    for start in range(0, len(tokens), step):
+    for chunk_index, start in enumerate(range(0, len(tokens), step)):
         chunk_tokens = tokens[start : start + chunk_size]
         if not chunk_tokens:
             break
@@ -48,8 +43,6 @@ def chunk_text(
                 },
             }
         )
-        chunk_index += 1
-
         if start + chunk_size >= len(tokens):
             break
 

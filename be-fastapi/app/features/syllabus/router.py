@@ -1,21 +1,13 @@
-import json
 import uuid
-from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import Response
-from sse_starlette.sse import EventSourceResponse
 
 from app.features.auth.dependencies import get_current_user
 from app.features.auth.models import User
-from app.features.export.dependencies import get_export_service
-from app.features.export.service import ExportService
-from app.features.history.dependencies import get_history_service
-from app.features.history.service import HistoryService
+from app.features.syllabus.export_service import SyllabusExportService
 from app.features.syllabus.dependencies import get_syllabus_service
-from app.features.syllabus.generator import generate_syllabus_stream
 from app.features.syllabus.schemas import (
-    SyllabusGenerateRequest,
     SyllabusResponse,
     SyllabusRevisionApplyRequest,
 )
@@ -25,36 +17,10 @@ from app.response import success_response
 router = APIRouter(tags=["syllabi"])
 
 
-@router.post("/generate")
-async def generate_syllabus(
-    request: SyllabusGenerateRequest,
-    current_user: User = Depends(get_current_user),
+def get_syllabus_export_service(
     service: SyllabusService = Depends(get_syllabus_service),
-) -> EventSourceResponse:
-    owner_id = current_user.id
-
-    async def event_generator() -> AsyncGenerator[dict[str, str], None]:
-        full_response = ""
-        syllabus_id: str | None = None
-        try:
-            async for chunk in generate_syllabus_stream(request, service.db):
-                if chunk.startswith("\n__DONE__:"):
-                    full_response = chunk[len("\n__DONE__:") :]
-                    syllabus = await service.create_syllabus_from_stream(
-                        request, full_response, owner_id=owner_id
-                    )
-                    await service.db.commit()
-                    syllabus_id = str(syllabus.id)
-                else:
-                    yield {"event": "chunk", "data": chunk}
-            yield {
-                "event": "done",
-                "data": json.dumps({"syllabus_id": syllabus_id}),
-            }
-        except Exception as exc:
-            yield {"event": "error", "data": json.dumps({"message": str(exc)})}
-
-    return EventSourceResponse(event_generator())
+) -> SyllabusExportService:
+    return SyllabusExportService(service.db)
 
 
 @router.get("/")
@@ -95,22 +61,29 @@ async def apply_revision(
 async def download_syllabus_docx(
     syllabus_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
-    service: ExportService = Depends(get_export_service),
-    syllabus_service: SyllabusService = Depends(get_syllabus_service),
-    history_service: HistoryService = Depends(get_history_service),
+    export_service: SyllabusExportService = Depends(get_syllabus_export_service),
 ) -> Response:
-    docx_bytes = await service.generate_docx(syllabus_id, owner_id=current_user.id)
-    syllabus = await syllabus_service.get_syllabus(syllabus_id, owner_id=current_user.id)
-    await history_service.record_event(
-        syllabus_id=syllabus_id,
-        owner_id=str(current_user.id),
-        action="exported",
-        summary="Downloaded DOCX export",
-        detail={"format": "docx"},
-        revision_index=len(syllabus.revision_history or []),
-    )
+    docx_bytes = await export_service.generate_docx(syllabus_id, owner_id=current_user.id)
     return Response(
         content=docx_bytes,
-        media_type=("application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
-        headers={"Content-Disposition": (f"attachment; filename=syllabus-{syllabus_id}.docx")},
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={
+            "Content-Disposition": f'attachment; filename="syllabus-{syllabus_id}.docx"',
+        },
+    )
+
+
+@router.get("/{syllabus_id}/download.pdf")
+async def download_syllabus_pdf(
+    syllabus_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    export_service: SyllabusExportService = Depends(get_syllabus_export_service),
+) -> Response:
+    pdf_bytes = await export_service.generate_pdf(syllabus_id, owner_id=current_user.id)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="syllabus-{syllabus_id}.pdf"',
+        },
     )

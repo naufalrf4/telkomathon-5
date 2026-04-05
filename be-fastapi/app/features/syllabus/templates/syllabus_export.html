@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      @page { size: A4; margin: 24mm 18mm; }
+      body { font-family: sans-serif; color: #172033; font-size: 11pt; line-height: 1.55; }
+      h1 { font-size: 24pt; margin: 0 0 8px; }
+      h2 { font-size: 15pt; margin: 24px 0 8px; color: #c2410c; }
+      h3 { font-size: 12pt; margin: 14px 0 6px; }
+      .meta-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 16px 0 22px; }
+      .meta-card, .section-card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; background: #ffffff; }
+      .eyebrow { font-size: 9pt; text-transform: uppercase; letter-spacing: .18em; color: #64748b; margin-bottom: 6px; }
+      .journey-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+      ul { margin: 6px 0 0 18px; padding: 0; }
+      li { margin: 2px 0; }
+      .summary-box { border-left: 4px solid #f97316; padding-left: 12px; margin: 18px 0; }
+      .muted { color: #475569; }
+    </style>
+  </head>
+  <body>
+    <h1>{{ course_title }}</h1>
+    <p class="muted">Topik: {{ topic }} · Level target: {{ target_level }}</p>
+
+    <div class="meta-grid">
+      <div class="meta-card">
+        <div class="eyebrow">Konteks kursus</div>
+        <div><strong>Kategori:</strong> {{ course_category or 'Belum diisi' }}</div>
+        <div><strong>Klien:</strong> {{ client_company_name or 'Belum diisi' }}</div>
+      </div>
+      <div class="meta-card">
+        <div class="eyebrow">Konteks bisnis</div>
+        <div>{{ commercial_overview or company_profile_summary or 'Belum tersedia' }}</div>
+      </div>
+    </div>
+
+    <div class="summary-box">
+      <div class="eyebrow">Ringkasan perusahaan</div>
+      <div>{{ company_profile_summary or 'Belum tersedia' }}</div>
+    </div>
+
+    <h2>Tujuan akhir pembelajaran</h2>
+    <div class="section-card">{{ tlo }}</div>
+
+    <h2>Target hasil</h2>
+    <div class="meta-grid">
+      <div class="section-card"><div class="eyebrow">Performance</div>{{ performance_result }}</div>
+      <div class="section-card"><div class="eyebrow">Condition</div>{{ condition_result }}</div>
+    </div>
+    <div class="section-card"><div class="eyebrow">Standard</div>{{ standard_result }}</div>
+
+    <h2>Modul belajar</h2>
+    <div class="section-card">
+      <ul>
+        {% for elo in elos %}
+        <li>{{ elo.elo }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <h2>Alur belajar</h2>
+    <div class="journey-grid">
+      {% for stage in journey_stages %}
+      <div class="section-card">
+        <div class="eyebrow">{{ stage.label }}</div>
+        <div><strong>Durasi:</strong> {{ stage.duration or 'Belum diisi' }}</div>
+        <p>{{ stage.description or 'Belum tersedia' }}</p>
+        <strong>Metode</strong>
+        <ul>
+          {% for method_item in stage.method %}
+          <li>{{ method_item }}</li>
+          {% endfor %}
+        </ul>
+        <strong>Materi</strong>
+        <ul>
+          {% for content_item in stage.content %}
+          <li>{{ content_item }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endfor %}
+    </div>
+
+    {% if revision_history %}
+    <h2>Riwayat revisi</h2>
+    <div class="section-card">
+      <ul>
+        {% for revision in revision_history %}
+        <li>
+          {{ revision.summary }}{% if revision.reason %} — {{ revision.reason }}{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+  </body>
+</html>

@@ -7,7 +7,7 @@ def build_source_summary_prompt(document_context: str) -> list[ChatCompletionMes
             "role": "system",
             "content": (
                 "You are an expert curriculum analyst. "
-                "Return valid JSON only with keys 'summary', 'key_points', and 'company_profile_focus'. "
+                "Return valid JSON only with keys 'summary', 'key_points', 'company_profile_focus', 'company_name', 'company_profile_summary', and 'company_profile_confidence'. "
                 "All output must be natural Bahasa Indonesia. Do not keep English sentence structure. "
                 "If the source documents are in English, translate the company profile and learning context into Bahasa Indonesia."
             ),
@@ -17,9 +17,10 @@ def build_source_summary_prompt(document_context: str) -> list[ChatCompletionMes
             "content": (
                 "Summarize the uploaded learning materials in Bahasa Indonesia. "
                 "Paksa seluruh hasil menjadi Bahasa Indonesia yang natural, termasuk jika materi sumber dominan berbahasa Inggris. "
-                "Untuk bagian company profile, tuliskan ringkasan perusahaan dalam kalimat Bahasa Indonesia yang jelas dan ringkas. "
+                "Deteksi nama perusahaan bila tersedia. Untuk bagian company profile, tuliskan ringkasan perusahaan dalam kalimat Bahasa Indonesia yang jelas, ringkas, dan siap dipakai untuk prefill formulir. "
+                "Gunakan nilai confidence sederhana: high, medium, atau low. "
                 "Return JSON with this shape: "
-                '{"summary": string, "key_points": string[], "company_profile_focus": string[]}\n\n'
+                '{"summary": string, "key_points": string[], "company_profile_focus": string[], "company_name": string | null, "company_profile_summary": string, "company_profile_confidence": "high" | "medium" | "low"}\n\n'
                 f"Materials:\n{document_context}"
             ),
         },

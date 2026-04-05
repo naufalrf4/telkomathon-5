@@ -3,56 +3,16 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 
 from app.exceptions import NotFoundException, ValidationException
-from app.features.chat.models import ChatMessage
-from app.features.history.models import ModuleDecomposition, OwnerHistory
-from app.features.syllabus.generator import parse_syllabus_json
 from app.features.syllabus.models import GeneratedSyllabus
-from app.features.syllabus.schemas import SyllabusGenerateRequest, SyllabusRevisionApplyRequest
+from app.features.syllabus.schemas import SyllabusRevisionApplyRequest
 
 
 class SyllabusService:
     def __init__(self, db: Any) -> None:
         self.db: Any = db
-
-    async def create_syllabus_from_stream(
-        self,
-        request: SyllabusGenerateRequest,
-        full_response: str,
-        *,
-        owner_id: uuid.UUID | None = None,
-    ) -> GeneratedSyllabus:
-        parsed = parse_syllabus_json(full_response)
-        syllabus = GeneratedSyllabus(
-            topic=request.topic,
-            target_level=request.target_level,
-            course_title=request.topic,
-            tlo=str(parsed["tlo"]),
-            performance_result=self._normalize_optional_text(parsed.get("performance_result")),
-            condition_result=self._normalize_optional_text(parsed.get("condition_result")),
-            standard_result=self._normalize_optional_text(parsed.get("standard_result")),
-            elos=self._normalize_elos(parsed.get("elos")),
-            journey=self._normalize_journey(parsed.get("journey")),
-            source_doc_ids=[str(d) for d in request.doc_ids],
-            revision_history=[],
-            status="draft",
-            owner_id=owner_id,
-        )
-        self.db.add(syllabus)
-        await self.db.flush()
-        await self.db.refresh(syllabus)
-        self.db.add(
-            OwnerHistory(
-                syllabus_id=syllabus.id,
-                owner_id=str(owner_id) if owner_id is not None else "default",
-                action="created",
-                summary=f"Created draft syllabus for {request.topic}",
-                detail={"topic": request.topic, "target_level": request.target_level},
-            )
-        )
-        return syllabus
 
     async def get_syllabi(self, *, owner_id: uuid.UUID | None = None) -> list[GeneratedSyllabus]:
         query = select(GeneratedSyllabus)
@@ -172,39 +132,6 @@ class SyllabusService:
             reason=request.reason.strip(),
             source_message_id=request.source_message_id,
         )
-        if request.source_message_id is not None:
-            await self._mark_chat_revision_applied(
-                syllabus_id=syllabus_id,
-                message_id=request.source_message_id,
-                owner_id=owner_id,
-                summary=request.summary.strip(),
-                reason=request.reason.strip(),
-                applied_fields=list(update_data.keys()),
-            )
-
-        # Clear stale derived module decompositions
-        await self.db.execute(
-            delete(ModuleDecomposition).where(ModuleDecomposition.syllabus_id == syllabus_id)
-        )
-
-        # Record revision event in owner history
-        revision_index = len(syllabus.revision_history)
-        history_entry = OwnerHistory(
-            syllabus_id=syllabus_id,
-            owner_id=str(owner_id) if owner_id is not None else "default",
-            action="revised",
-            summary=request.summary.strip(),
-            detail={
-                "applied_fields": list(update_data.keys()),
-                "reason": request.reason.strip(),
-                "source_message_id": str(request.source_message_id)
-                if request.source_message_id
-                else None,
-            },
-            revision_index=revision_index if revision_index >= 0 else None,
-        )
-        self.db.add(history_entry)
-
         return syllabus
 
     async def create_finalized_syllabus(
@@ -247,43 +174,7 @@ class SyllabusService:
         self.db.add(syllabus)
         await self.db.flush()
         await self.db.refresh(syllabus)
-        self.db.add(
-            OwnerHistory(
-                syllabus_id=syllabus.id,
-                owner_id=str(owner_id) if owner_id is not None else "default",
-                action="finalized",
-                summary=f"Finalized syllabus for {topic}",
-                detail={"topic": topic, "target_level": target_level},
-                revision_index=0,
-            )
-        )
         return syllabus
-
-    async def _mark_chat_revision_applied(
-        self,
-        *,
-        syllabus_id: uuid.UUID,
-        message_id: uuid.UUID,
-        owner_id: uuid.UUID | None,
-        summary: str,
-        reason: str,
-        applied_fields: list[str],
-    ) -> None:
-        result = await self.db.execute(select(ChatMessage).where(ChatMessage.id == message_id))
-        message = result.scalar_one_or_none()
-        if message is None:
-            raise NotFoundException("Chat message", str(message_id))
-        if message.syllabus_id != syllabus_id:
-            raise ValidationException("Chat message does not belong to the target syllabus")
-        if owner_id is not None:
-            await self.get_syllabus(syllabus_id, owner_id=owner_id)
-        message.revision_applied = {
-            "applied_at": datetime.now(UTC).isoformat(),
-            "summary": summary,
-            "reason": reason,
-            "applied_fields": applied_fields,
-        }
-        await self.db.flush()
 
     def _normalize_optional_text(self, value: object) -> str | None:
         if value is None:

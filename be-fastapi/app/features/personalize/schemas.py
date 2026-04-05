@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any, cast
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class CompetencyGap(BaseModel):
@@ -10,6 +10,27 @@ class CompetencyGap(BaseModel):
     current_level: int
     required_level: int
     gap_description: str
+
+    @field_validator("skill", "gap_description")
+    @classmethod
+    def validate_text(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Field must not be empty")
+        return normalized
+
+    @field_validator("current_level", "required_level")
+    @classmethod
+    def validate_level(cls, value: int) -> int:
+        if value < 1 or value > 5:
+            raise ValueError("Level must be between 1 and 5")
+        return value
+
+    @model_validator(mode="after")
+    def validate_gap_progression(self) -> "CompetencyGap":
+        if self.required_level < self.current_level:
+            raise ValueError("required_level must be greater than or equal to current_level")
+        return self
 
 
 class LearningRecommendation(BaseModel):
@@ -22,16 +43,32 @@ class LearningRecommendation(BaseModel):
 
 class PersonalizeRequest(BaseModel):
     participant_name: str
-    competency_gaps: list[CompetencyGap]
+    competency_gaps: list[CompetencyGap] = Field(min_length=1)
+
+    @field_validator("participant_name")
+    @classmethod
+    def validate_participant_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("participant_name must not be empty")
+        return normalized
 
 
 class BulkParticipantRequest(BaseModel):
     participant_name: str
-    competency_gaps: list[CompetencyGap]
+    competency_gaps: list[CompetencyGap] = Field(min_length=1)
+
+    @field_validator("participant_name")
+    @classmethod
+    def validate_participant_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("participant_name must not be empty")
+        return normalized
 
 
 class BulkPersonalizeRequest(BaseModel):
-    participants: list[BulkParticipantRequest]
+    participants: list[BulkParticipantRequest] = Field(min_length=1)
 
 
 class PersonalizeResponse(BaseModel):

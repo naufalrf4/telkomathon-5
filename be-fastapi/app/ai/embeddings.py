@@ -1,6 +1,7 @@
 import asyncio
 
 from app.ai.client import get_azure_client
+from app.ai.constants import EMBEDDING_VECTOR_DIMENSIONS
 from app.config import settings
 from app.exceptions import AIServiceException
 
@@ -11,7 +12,7 @@ async def generate_embedding(text: str) -> list[float]:
         response = await client.embeddings.create(
             input=text,
             model=settings.AZURE_OPENAI_EMBEDDING_DEPLOYMENT,
-            dimensions=settings.EMBEDDING_DIMENSIONS,
+            dimensions=EMBEDDING_VECTOR_DIMENSIONS,
         )
         return response.data[0].embedding
     except Exception as exc:
@@ -31,15 +32,13 @@ async def generate_embeddings_batch(
             response = await client.embeddings.create(
                 input=batch,
                 model=settings.AZURE_OPENAI_EMBEDDING_DEPLOYMENT,
-                dimensions=settings.EMBEDDING_DIMENSIONS,
+                dimensions=EMBEDDING_VECTOR_DIMENSIONS,
             )
             sorted_data = sorted(response.data, key=lambda x: x.index)
             results.extend([item.embedding for item in sorted_data])
             if i + batch_size < len(texts):
                 await asyncio.sleep(0.1)
         except Exception as exc:
-            raise AIServiceException(
-                f"Batch embedding failed at batch {i}: {exc}"
-            ) from exc
+            raise AIServiceException(f"Batch embedding failed at batch {i}: {exc}") from exc
 
     return results

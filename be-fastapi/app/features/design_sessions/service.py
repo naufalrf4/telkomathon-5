@@ -80,11 +80,16 @@ def fallback_source_summary(documents: Sequence[Document]) -> dict[str, object]:
 
     deduped_key_points = list(dict.fromkeys(key_points))[:5]
     summary = _build_indonesian_company_profile_summary(focus_points)
+    company_name = _document_company_name(documents)
+    extracted_summary = _document_company_profile_summary(documents)
     return {
         "summary": summary,
         "key_points": deduped_key_points
         or ["Sumber belajar siap digunakan untuk menyusun tujuan pembelajaran."],
         "company_profile_focus": focus_points,
+        "company_name": company_name,
+        "company_profile_summary": extracted_summary or summary,
+        "company_profile_confidence": _document_company_confidence(documents),
     }
 
 
@@ -420,10 +425,14 @@ class DesignSessionService:
     async def create_session(
         self, request: DesignSessionCreateRequest, *, owner_id: uuid.UUID | None = None
     ) -> DesignSession:
-        _ = await self._get_ready_documents(request.document_ids)
+        documents = await self._get_ready_documents(request.document_ids)
+        source_summary = fallback_source_summary(documents)
         session = DesignSession(
             document_ids=[str(item) for item in request.document_ids],
             owner_id=owner_id,
+            source_summary=source_summary,
+            course_context=self._build_prefill_course_context(source_summary),
+            wizard_step="summary_ready",
         )
         self.db.add(session)
         await self.db.flush()
@@ -476,6 +485,10 @@ class DesignSessionService:
         self._ensure_not_finalized(session)
         documents = await self._get_ready_documents(self._document_ids_from_session(session))
         session.source_summary = await self._generate_source_summary(documents)
+        session.course_context = self._merge_prefill_course_context(
+            session.course_context,
+            session.source_summary,
+        )
         if session.wizard_step == "uploaded":
             session.wizard_step = "summary_ready"
         await self.db.flush()
@@ -803,6 +816,9 @@ class DesignSessionService:
         return explicit_title or self._course_topic(course_context)
 
     def _company_profile_summary(self, source_summary: dict[str, object]) -> str | None:
+        explicit_summary = source_summary.get("company_profile_summary")
+        if isinstance(explicit_summary, str) and explicit_summary.strip():
+            return explicit_summary.strip()
         summary = source_summary.get("summary")
         if not isinstance(summary, str):
             return None
@@ -992,6 +1008,13 @@ class DesignSessionService:
         ]
         if not normalized_focus:
             normalized_focus = fallback_focus[:3]
+        payload_company_name = payload.get("company_name")
+        normalized_company_name = (
+            payload_company_name.strip()
+            if isinstance(payload_company_name, str) and payload_company_name.strip()
+            else cast(str | None, fallback.get("company_name"))
+        )
+        payload_company_profile_summary = payload.get("company_profile_summary")
         normalized_summary = self._normalize_company_profile_summary(
             summary.strip(),
             normalized_focus[:5] or fallback_focus[:3] or normalized_key_points[:3],
@@ -1002,13 +1025,86 @@ class DesignSessionService:
             and fallback_focus
         ):
             normalized_summary = _build_indonesian_company_profile_summary(fallback_focus[:3])
+        explicit_company_profile_summary = (
+            self._normalize_company_profile_summary(
+                payload_company_profile_summary.strip(),
+                normalized_focus[:5] or fallback_focus[:3] or normalized_key_points[:3],
+            )
+            if isinstance(payload_company_profile_summary, str)
+            and payload_company_profile_summary.strip()
+            else None
+        )
+        payload_company_confidence = payload.get("company_profile_confidence")
+        company_profile_confidence = (
+            payload_company_confidence.strip().lower()
+            if isinstance(payload_company_confidence, str)
+            and payload_company_confidence.strip().lower() in {"high", "medium", "low"}
+            else cast(str | None, fallback.get("company_profile_confidence"))
+        )
         return {
             "summary": normalized_summary or fallback["summary"],
             "key_points": (normalized_key_points[:5] or fallback["key_points"]),
             "company_profile_focus": normalized_focus[:5]
             or fallback_focus[:3]
             or fallback["company_profile_focus"],
+            "company_name": normalized_company_name,
+            "company_profile_summary": explicit_company_profile_summary
+            or normalized_summary
+            or fallback.get("company_profile_summary")
+            or fallback["summary"],
+            "company_profile_confidence": company_profile_confidence or "medium",
         }
+
+    def _build_prefill_course_context(
+        self,
+        source_summary: dict[str, object],
+    ) -> dict[str, object]:
+        return {
+            "topic": "",
+            "target_level": 3,
+            "additional_context": "",
+            "course_category": "",
+            "client_company_name": self._optional_summary_text(source_summary, "company_name")
+            or "",
+            "course_title": "",
+            "commercial_overview": self._optional_summary_text(
+                source_summary,
+                "company_profile_summary",
+            )
+            or "",
+        }
+
+    def _merge_prefill_course_context(
+        self,
+        existing: dict[str, object] | None,
+        source_summary: dict[str, object],
+    ) -> dict[str, object]:
+        merged = dict(existing or self._build_prefill_course_context(source_summary))
+        if not str(merged.get("client_company_name", "")).strip():
+            merged["client_company_name"] = (
+                self._optional_summary_text(source_summary, "company_name") or ""
+            )
+        if not str(merged.get("commercial_overview", "")).strip():
+            merged["commercial_overview"] = (
+                self._optional_summary_text(source_summary, "company_profile_summary") or ""
+            )
+        merged.setdefault("topic", "")
+        merged.setdefault("target_level", 3)
+        merged.setdefault("additional_context", "")
+        merged.setdefault("course_category", "")
+        merged.setdefault("course_title", "")
+        return merged
+
+    def _optional_summary_text(
+        self,
+        source_summary: dict[str, object],
+        key: str,
+    ) -> str | None:
+        value = source_summary.get(key)
+        if not isinstance(value, str):
+            return None
+        normalized = self._normalize_export_text(value)
+        return normalized or None
 
     async def _generate_tlo_options(
         self,
@@ -1101,6 +1197,39 @@ class DesignSessionService:
                 if str(option.get("elo", "")).strip() not in normalized_previous
             ]
         return options or fallback
+
+
+def _document_company_name(documents: Sequence[Document]) -> str | None:
+    for document in documents:
+        extraction = _document_extraction_payload(document)
+        value = extraction.get("company_name")
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _document_company_profile_summary(documents: Sequence[Document]) -> str | None:
+    for document in documents:
+        extraction = _document_extraction_payload(document)
+        value = extraction.get("company_profile_summary")
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _document_company_confidence(documents: Sequence[Document]) -> str | None:
+    for document in documents:
+        extraction = _document_extraction_payload(document)
+        value = extraction.get("confidence")
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _document_extraction_payload(document: Document) -> dict[str, object]:
+    metadata = document.metadata_ if isinstance(document.metadata_, dict) else {}
+    extraction = metadata.get("extraction")
+    return extraction if isinstance(extraction, dict) else {}
 
 
 def _looks_predominantly_english(value: str) -> bool:

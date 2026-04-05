@@ -1,4 +1,5 @@
 import json
+import logging
 import uuid
 from collections.abc import Sequence
 from typing import Any, cast
@@ -10,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai.llm import chat_complete
 from app.ai.prompts.personalize import build_personalize_prompt
 from app.exceptions import AIServiceException, NotFoundException
-from app.features.history.models import OwnerHistory
 from app.features.personalize.models import PersonalizationResult
 from app.features.personalize.schemas import (
     BulkPersonalizeRequest,
@@ -20,6 +20,8 @@ from app.features.personalize.schemas import (
     PersonalizeResponse,
 )
 from app.features.syllabus.models import GeneratedSyllabus
+
+logger = logging.getLogger(__name__)
 
 
 class PersonalizeService:
@@ -41,21 +43,6 @@ class PersonalizeService:
             competency_gaps=[g.model_dump() for g in request.competency_gaps],
             revision_index=current_revision_index,
         )
-
-        history_entry = OwnerHistory(
-            syllabus_id=syllabus_id,
-            owner_id=str(owner_id) if owner_id is not None else "default",
-            action="personalized",
-            summary=f"Generated recommendation plan for {record.participant_name}",
-            detail={
-                "participant_name": record.participant_name,
-                "revision_index": current_revision_index,
-                "gap_count": len(record.competency_gaps),
-                "recommendation_count": len(record.recommendations),
-            },
-            revision_index=current_revision_index,
-        )
-        self.db.add(history_entry)
         return PersonalizeResponse.from_orm_coerce(record)
 
     async def analyze_and_recommend_bulk(
@@ -83,21 +70,6 @@ class PersonalizeService:
                 bulk_session_id=bulk_session_id,
             )
             results.append(PersonalizeResponse.from_orm_coerce(record))
-
-        history_entry = OwnerHistory(
-            syllabus_id=syllabus_id,
-            owner_id=str(owner_id) if owner_id is not None else "default",
-            action="bulk_personalized",
-            summary=f"Generated bulk recommendation plan for {len(results)} participants",
-            detail={
-                "bulk_session_id": str(bulk_session_id),
-                "participant_count": len(results),
-                "participant_names": [result.participant_name for result in results],
-                "revision_index": current_revision_index,
-            },
-            revision_index=current_revision_index,
-        )
-        self.db.add(history_entry)
 
         return BulkPersonalizeResponse(
             syllabus_id=syllabus_id,
@@ -165,23 +137,22 @@ class PersonalizeService:
         competency_gaps: list[dict[str, object]],
         syllabus: GeneratedSyllabus,
     ) -> list[LearningRecommendation]:
-        try:
-            raw = await chat_complete(list(messages))
-            if not isinstance(raw, str):
-                raise AIServiceException("Unexpected non-string response from LLM")
-            parsed = cast(dict[str, Any], json.loads(raw))
-            raw_recs = parsed.get("recommendations", [])
-            recommendations = _normalize_recommendations(raw_recs)
-            if recommendations:
-                return recommendations
-        except (AIServiceException, json.JSONDecodeError, AttributeError, TypeError, ValueError):
-            pass
+        raw = await chat_complete(list(messages))
+        if not isinstance(raw, str):
+            raise AIServiceException("Unexpected non-string response from LLM")
 
-        return _fallback_recommendations(
-            participant_name=participant_name,
-            competency_gaps=competency_gaps,
-            syllabus=syllabus,
-        )
+        try:
+            parsed = cast(dict[str, Any], json.loads(raw))
+        except json.JSONDecodeError as exc:
+            raise AIServiceException("Personalization response was not valid JSON") from exc
+
+        raw_recs = parsed.get("recommendations", [])
+        recommendations = _normalize_recommendations(raw_recs)
+        if not recommendations:
+            raise AIServiceException(
+                "Personalization response did not contain valid recommendations"
+            )
+        return recommendations
 
     async def _create_personalization_record(
         self,
@@ -229,121 +200,59 @@ def _normalize_recommendations(raw: list[object]) -> list[LearningRecommendation
     for item in raw:
         if not isinstance(item, dict):
             continue
-        modules = item.get("modules", [])
-        if isinstance(modules, list):
+        modules = item.get("modules")
+        if isinstance(modules, list) and modules:
             for mod in modules:
                 if not isinstance(mod, dict):
                     continue
+                title = str(mod.get("title", "")).strip()
+                description = str(mod.get("description", "")).strip()
+                if not title or not description:
+                    continue
+                duration = _normalize_positive_int(mod.get("duration_min"), default=30)
                 result.append(
                     LearningRecommendation(
                         type=str(mod.get("type", "additional")),
-                        title=str(mod.get("title", "")),
-                        description=str(mod.get("description", "")),
-                        estimated_duration_minutes=int(mod.get("duration_min", 30)),
+                        title=title,
+                        description=description,
+                        estimated_duration_minutes=duration,
                         priority=min(priority_counter, 3),
                     )
                 )
                 priority_counter += 1
         else:
+            title = str(item.get("title", "")).strip()
+            description = str(item.get("description", "")).strip()
+            if not title or not description:
+                continue
+            duration = _normalize_positive_int(item.get("estimated_duration_minutes"), default=30)
+            priority = _normalize_priority(item.get("priority"), default=priority_counter)
             result.append(
                 LearningRecommendation(
                     type=str(item.get("type", "additional")),
-                    title=str(item.get("title", "")),
-                    description=str(item.get("description", "")),
-                    estimated_duration_minutes=int(item.get("estimated_duration_minutes", 30)),
-                    priority=min(int(item.get("priority", priority_counter)), 3),
+                    title=title,
+                    description=description,
+                    estimated_duration_minutes=duration,
+                    priority=priority,
                 )
             )
             priority_counter += 1
     return result
 
 
-def _fallback_recommendations(
-    *,
-    participant_name: str,
-    competency_gaps: list[dict[str, object]],
-    syllabus: GeneratedSyllabus,
-) -> list[LearningRecommendation]:
-    topic = (syllabus.course_title or syllabus.topic or "silabus final").strip()
-    learning_focus = _derive_learning_focus(syllabus.elos)
-    participant_label = participant_name.strip() or "peserta"
+def _normalize_positive_int(value: object, *, default: int) -> int:
+    if value is None:
+        return default
 
-    recommendations: list[LearningRecommendation] = []
-    for index, gap in enumerate(competency_gaps, start=1):
-        skill = str(gap.get("skill", "Kompetensi inti")).strip() or "Kompetensi inti"
-        current_level = _to_int(gap.get("current_level"), default=0)
-        required_level = _to_int(gap.get("required_level"), default=current_level + 1)
-        gap_description = str(gap.get("gap_description", "")).strip()
+    try:
+        parsed = int(str(value).strip())
+    except (TypeError, ValueError):
+        logger.warning("Invalid numeric recommendation value", extra={"value": value})
+        return default
 
-        description_parts = [
-            f"Rekomendasi fallback untuk {participant_label} agar meningkatkan kompetensi {skill} pada konteks {topic}.",
-            f"Fokus belajar: {learning_focus}.",
-            f"Target peningkatan level {current_level} ke {required_level} melalui penguatan konsep inti, demonstrasi, dan latihan terarah.",
-        ]
-        if gap_description:
-            description_parts.append(f"Gap utama: {gap_description}.")
-
-        recommendations.append(
-            LearningRecommendation(
-                type=_fallback_type(index),
-                title=f"Penguatan {skill}",
-                description=" ".join(description_parts),
-                estimated_duration_minutes=_fallback_duration(current_level, required_level, index),
-                priority=min(index, 3),
-            )
-        )
-
-    if recommendations:
-        return recommendations
-
-    return [
-        LearningRecommendation(
-            type="guided-practice",
-            title=f"Penguatan kompetensi untuk {participant_label}",
-            description=(
-                f"Fallback recommendation untuk {topic}. Fokus belajar: {learning_focus}. "
-                "Susun sesi penguatan konsep inti, demonstrasi terarah, dan latihan mandiri yang relevan dengan kebutuhan kerja."
-            ),
-            estimated_duration_minutes=45,
-            priority=1,
-        )
-    ]
+    return parsed if parsed > 0 else default
 
 
-def _derive_learning_focus(raw_elos: object) -> str:
-    if not isinstance(raw_elos, Sequence) or isinstance(raw_elos, str | bytes):
-        return "penguatan kompetensi inti"
-
-    focus_items: list[str] = []
-    for item in raw_elos:
-        if not isinstance(item, dict):
-            continue
-        elo = str(item.get("elo", "")).strip()
-        if elo:
-            focus_items.append(elo.rstrip("."))
-        if len(focus_items) == 3:
-            break
-    if not focus_items:
-        return "penguatan kompetensi inti"
-    return "; ".join(focus_items)
-
-
-def _fallback_type(index: int) -> str:
-    fallback_types = ["guided-practice", "microlearning", "applied-review"]
-    return fallback_types[(index - 1) % len(fallback_types)]
-
-
-def _fallback_duration(current_level: int, required_level: int, index: int) -> int:
-    gap = max(required_level - current_level, 1)
-    return min(30 + gap * 15 + (index - 1) * 10, 120)
-
-
-def _to_int(value: object, *, default: int) -> int:
-    if isinstance(value, int):
-        return value
-    if isinstance(value, str):
-        try:
-            return int(value)
-        except ValueError:
-            return default
-    return default
+def _normalize_priority(value: object, *, default: int) -> int:
+    normalized = _normalize_positive_int(value, default=default)
+    return min(normalized, 3)
