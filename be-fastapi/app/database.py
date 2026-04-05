@@ -43,5 +43,5 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db() -> None:
-    async with engine.begin() as conn:
+    async with engine.begin():
         pass

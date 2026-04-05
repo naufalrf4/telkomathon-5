@@ -12,10 +12,8 @@ class Settings(BaseSettings):
     AZURE_OPENAI_CHAT_DEPLOYMENT: str
     AZURE_OPENAI_EMBEDDING_DEPLOYMENT: str
     AZURE_OPENAI_API_VERSION: str = "2024-02-01"
-    EMBEDDING_DIMENSIONS: int = 3072
-    SIMILARITY_THRESHOLD: float = 0.75
-    MAX_CHAT_HISTORY: int = 10
-    UPLOAD_DIR: str = "uploads"
+    AZURE_OPENAI_TIMEOUT_SECONDS: float = 30.0
+    AZURE_OPENAI_MAX_RETRIES: int = 2
     MAX_UPLOAD_MB: int = 100
     MAX_DOCUMENT_TEXT_CHARS: int = 200000
     MAX_PDF_PARSE_PAGES: int = 80
@@ -29,13 +27,14 @@ class Settings(BaseSettings):
     )
 
     # Auth settings
-    SECRET_KEY: str = "change-me-in-production"
+    SECRET_KEY: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
     JWT_ALGORITHM: str = "HS256"
-    SEED_USER_USERNAME: str = "telkomathon5@nrfdev.space"
-    SEED_USER_FULL_NAME: str = "Telkomathon 5"
-    SEED_USER_EMAIL: str = "telkomathon5@nrfdev.space"
-    SEED_USER_PASSWORD: str = "T3lkomathon5"
+    ENABLE_SEED_USER: bool = False
+    SEED_USER_USERNAME: str = ""
+    SEED_USER_FULL_NAME: str = ""
+    SEED_USER_EMAIL: str = ""
+    SEED_USER_PASSWORD: str = ""
 
     @property
     def cors_allowed_origins(self) -> list[str]:

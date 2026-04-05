@@ -1,6 +1,6 @@
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 import bcrypt
 import jwt
@@ -76,7 +76,7 @@ class AuthService:
     async def authenticate(self, *, email: str, password: str) -> User:
         normalized_email = email.strip().lower()
         result = await self.db.execute(select(User).where(User.email == normalized_email))
-        user = result.scalar_one_or_none()
+        user = cast(User | None, result.scalar_one_or_none())
         if user is None or not verify_password(password, user.hashed_password):
             raise AuthenticationException("Invalid email or password")
         if not user.is_active:
@@ -85,7 +85,7 @@ class AuthService:
 
     async def get_user_by_id(self, user_id: uuid.UUID) -> User:
         result = await self.db.execute(select(User).where(User.id == user_id))
-        user = result.scalar_one_or_none()
+        user = cast(User | None, result.scalar_one_or_none())
         if user is None:
             raise NotFoundException("User", str(user_id))
         return user

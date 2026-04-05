@@ -6,10 +6,8 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 import app.features.auth.models  # noqa: F401
-import app.features.chat.models  # noqa: F401
 import app.features.design_sessions.models  # noqa: F401
 import app.features.documents.models  # noqa: F401
-import app.features.history.models  # noqa: F401
 import app.features.personalize.models  # noqa: F401
 import app.features.syllabus.models  # noqa: F401
 from alembic import context

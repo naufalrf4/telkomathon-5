@@ -23,6 +23,7 @@ async def chat_complete(
             messages=messages,
             stream=False,
         )
+        _validate_finish_reason(response.choices[0].finish_reason if response.choices else None)
         content = response.choices[0].message.content
         return content or ""
     except Exception as exc:
@@ -40,6 +41,7 @@ async def chat_complete_json(
             response_format={"type": "json_object"},
             stream=False,
         )
+        _validate_finish_reason(response.choices[0].finish_reason if response.choices else None)
         content = response.choices[0].message.content or "{}"
         parsed = json.loads(content)
         if not isinstance(parsed, dict):
@@ -60,8 +62,19 @@ async def _stream_response(
             stream=True,
         )
         async for chunk in stream:
-            delta = chunk.choices[0].delta.content if chunk.choices else None
+            if not chunk.choices:
+                continue
+            choice = chunk.choices[0]
+            _validate_finish_reason(choice.finish_reason)
+            delta = choice.delta.content
             if delta:
                 yield delta
     except Exception as exc:
         raise AIServiceException(f"LLM stream failed: {exc}") from exc
+
+
+def _validate_finish_reason(finish_reason: str | None) -> None:
+    if finish_reason == "content_filter":
+        raise AIServiceException("LLM response blocked by content filter")
+    if finish_reason == "length":
+        raise AIServiceException("LLM response truncated before completion")
