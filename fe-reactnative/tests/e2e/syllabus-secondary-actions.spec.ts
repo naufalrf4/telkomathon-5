@@ -114,11 +114,11 @@ async function installSyllabusMocks(page: Page) {
     await fulfillJson(route, success(syllabus));
   });
 
-  await page.route('**/api/v1/syllabi/syllabus-1/download.pdf', async (route) => {
+  await page.route('**/api/v1/syllabi/syllabus-1/download.docx', async (route) => {
     await route.fulfill({
       status: 200,
-      contentType: 'application/pdf',
-      body: Buffer.from('%PDF-1.4 mock export pdf'),
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      body: Buffer.from('PK-mock-docx'),
     });
   });
 }
@@ -129,7 +129,7 @@ test('syllabus detail centralizes personalize, revision, and export actions', as
 
   await expect(page.getByText('Personalisasi', { exact: true }).last()).toBeVisible();
   await expect(page.getByText('Revisi', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('Ekspor', { exact: true })).toBeVisible();
+  await expect(page.getByText('Export DOCX', { exact: true })).toBeVisible();
   await expect(page.getByText('Satu peserta')).toHaveCount(0);
   await expect(page.getByText('Banyak peserta')).toHaveCount(0);
 });
@@ -146,12 +146,14 @@ test('revision workspace applies syllabus changes and shows success state', asyn
   await expect(page.getByText('Detail kurikulum sudah diperbarui.')).toBeVisible();
 });
 
-test('export screen previews pdf and downloads pdf', async ({ page }) => {
+test('final syllabus export downloads docx directly', async ({ page }) => {
   await installSyllabusMocks(page);
-  await page.goto('/syllabus/syllabus-1/export');
+  await page.goto('/syllabus/syllabus-1');
 
-  await expect(page.getByTitle('PDF preview')).toBeVisible();
-  await page.getByText('Unduh PDF').click();
+  const responsePromise = page.waitForResponse('**/api/v1/syllabi/syllabus-1/download.docx');
+  await page.getByText('Export DOCX', { exact: true }).click();
+  const response = await responsePromise;
 
-  await expect(page.getByText('Ekspor siap diunduh')).toBeVisible();
+  await expect(response.ok()).toBeTruthy();
+  await expect(page.getByText('Export DOCX siap')).toBeVisible();
 });

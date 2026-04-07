@@ -103,13 +103,47 @@ export default function PersonalizeScreen() {
       setFormError('Isi nama peserta terlebih dahulu.');
       return;
     }
-    const validGaps = gaps.filter(g => g.skill.trim() !== '');
-    if (validGaps.length === 0) {
+    const normalizedGaps = gaps
+      .map(({ id: _id, ...gap }) => ({
+        ...gap,
+        skill: gap.skill.trim(),
+        gap_description: gap.gap_description.trim(),
+      }))
+      .filter((gap) => gap.skill || gap.gap_description);
+
+    if (normalizedGaps.length === 0) {
       setFormError('Tambahkan minimal satu kesenjangan kemampuan.');
       return;
     }
+
+    const incompleteGap = normalizedGaps.find((gap) => !gap.skill);
+    if (incompleteGap) {
+      setFormError('Lengkapi nama kemampuan pada setiap kesenjangan yang ingin dianalisis.');
+      return;
+    }
+
+    const invalidLevelGap = normalizedGaps.find(
+      (gap) =>
+        gap.current_level < 1 ||
+        gap.current_level > 5 ||
+        gap.required_level < 1 ||
+        gap.required_level > 5 ||
+        gap.required_level < gap.current_level,
+    );
+    if (invalidLevelGap) {
+      setFormError('Pastikan level target tidak lebih rendah dari level saat ini.');
+      return;
+    }
+
+    const validGaps = normalizedGaps.map((gap) => ({
+      ...gap,
+      gap_description:
+        gap.gap_description ||
+        `Butuh peningkatan ${gap.skill} dari level ${gap.current_level} ke level ${gap.required_level}.`,
+    }));
+
     personalize(
-      { participantName: participantName.trim(), gaps: validGaps.map(({ id: _id, ...gap }) => gap) },
+      { participantName: participantName.trim(), gaps: validGaps },
       {
         onError: (error) => {
           setSubmitError(getErrorMessage(error, 'Personalisasi belum berhasil dibuat.'));
@@ -213,64 +247,136 @@ export default function PersonalizeScreen() {
   );
 }
 
+// ── Priority section meta ───────────────────────────────────────────────────
+const PRIORITY_META: Record<string, { label: string; borderColor: string; bg: string; textColor: string; dotColor: string }> = {
+  High:   { label: 'Prioritas Tinggi',  borderColor: '#DC2626', bg: '#FEF2F2', textColor: '#991B1B', dotColor: '#DC2626' },
+  Medium: { label: 'Prioritas Sedang',  borderColor: '#D97706', bg: '#FFFBEB', textColor: '#92400E', dotColor: '#D97706' },
+  Low:    { label: 'Prioritas Rendah',  borderColor: '#2563EB', bg: '#EFF6FF', textColor: '#1E3A8A', dotColor: '#2563EB' },
+};
+
 function PersonalizationResultView({ result, currentRevisionIndex, onBack, onReset }: { result: PersonalizationResult, currentRevisionIndex: number, onBack: () => void, onReset: () => void }) {
   const grouped = groupRecommendations(result.recommendations);
   const isOutdated = result.revision_index !== currentRevisionIndex;
-  
-  const getPriorityText = (priority: string) => {
-    if (priority === 'High') return 'Prioritas Tinggi';
-    if (priority === 'Medium') return 'Prioritas Sedang';
-    return 'Prioritas Rendah';
-  };
+
+  const totalRecs = result.recommendations.length;
+  const totalMinutes = result.recommendations.reduce((sum, r) => sum + (r.estimated_duration_minutes ?? 0), 0);
 
   return (
     <ScrollView className="flex-1 bg-neutral-50">
-        <View className="max-w-5xl mx-auto w-full p-6">
-          <PageHeader
-            eyebrow="Hasil"
-            title="Rekomendasi belajar siap dipakai"
-            description={`Peserta: ${result.participant_name || 'Tanpa nama peserta'}`}
-            actions={(
-              <>
-                <Button variant="ghost" title="Kembali" onPress={onBack} icon={<Ionicons name="arrow-back" size={18} color={colors.textSecondary} />} />
-                <Button variant="outline" title="Buat lagi" onPress={onReset} />
-              </>
-            )}
-          />
+      <View className="max-w-5xl mx-auto w-full px-4 pb-10 pt-6 lg:px-6">
 
-        <View className="mt-6">
-          <AlertBanner
-            variant={isOutdated ? 'warning' : 'success'}
-            title={isOutdated ? 'Hasil ini dibuat dari versi kurikulum sebelumnya' : 'Hasil ini sudah sesuai dengan versi kurikulum terbaru'}
-            description={`Dibuat dari versi ${result.revision_index + 1}. Versi aktif saat ini: ${currentRevisionIndex + 1}.`}
-          />
+        {/* ── Header bar ──────────────────────────────────────────── */}
+        <View className="mb-6 flex-row items-start justify-between gap-4">
+          <View className="flex-1">
+            <Text className="text-xs font-semibold uppercase tracking-widest text-neutral-500 mb-1">Hasil</Text>
+            <Text className="text-2xl font-bold leading-tight text-neutral-950">
+              Rekomendasi belajar siap dipakai
+            </Text>
+            <View className="mt-1.5 flex-row items-center gap-1.5">
+              <Ionicons name="person-outline" size={14} color={colors.textSecondary} />
+              <Text className="text-sm text-neutral-600">
+                {result.participant_name || 'Tanpa nama peserta'}
+              </Text>
+            </View>
+          </View>
+          {/* Actions — right-aligned, compact */}
+          <View className="flex-row items-center gap-2 pt-1">
+            <Button
+              variant="ghost"
+              title="Kembali"
+              onPress={onBack}
+              icon={<Ionicons name="arrow-back" size={18} color={colors.textSecondary} />}
+            />
+            <Button variant="outline" title="Buat lagi" onPress={onReset} />
+          </View>
         </View>
 
-        {Object.entries(grouped).map(([priority, items]) => (
-          items.length > 0 && (
-            <View key={priority} className="mb-8">
-                <View className={`mb-4 self-start rounded-lg px-3 py-1.5 flex-row items-center
-                  ${priority === 'High' ? 'bg-primary-50 border border-primary-100' : 
-                    priority === 'Medium' ? 'bg-yellow-50 border border-yellow-100' : 
-                    'bg-blue-50 border border-blue-100'}`}>
-                <View className={`w-2 h-2 rounded-full mr-2 
-                  ${priority === 'High' ? 'bg-primary-600' : priority === 'Medium' ? 'bg-yellow-500' : 'bg-blue-500'}`} />
-                <Text className={`font-bold text-sm uppercase tracking-wide
-                  ${priority === 'High' ? 'text-primary-700' : priority === 'Medium' ? 'text-yellow-700' : 'text-blue-700'}`}>
-                  {getPriorityText(priority)}
-                </Text>
+        {/* ── Revision status banner ───────────────────────────────── */}
+        <AlertBanner
+          variant={isOutdated ? 'warning' : 'success'}
+          title={isOutdated ? 'Hasil ini dibuat dari versi kurikulum sebelumnya' : 'Hasil ini sudah sesuai dengan versi kurikulum terbaru'}
+          description={`Dibuat dari versi ${result.revision_index + 1}. Versi aktif saat ini: ${currentRevisionIndex + 1}.`}
+        />
+
+        {/* ── Summary stat chips ───────────────────────────────────── */}
+        <View className="mt-5 mb-8 flex-row gap-3">
+          <View
+            className="flex-row items-center gap-2 rounded-full px-4 py-2"
+            style={{ backgroundColor: colors.neutral[100], borderWidth: 1, borderColor: colors.border }}
+          >
+            <Ionicons name="layers-outline" size={14} color={colors.textSecondary} />
+            <Text className="text-sm font-semibold text-neutral-700">{totalRecs} rekomendasi</Text>
+          </View>
+          <View
+            className="flex-row items-center gap-2 rounded-full px-4 py-2"
+            style={{ backgroundColor: colors.neutral[100], borderWidth: 1, borderColor: colors.border }}
+          >
+            <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
+            <Text className="text-sm font-semibold text-neutral-700">±{totalMinutes} menit</Text>
+          </View>
+        </View>
+
+        {/* ── Priority groups ──────────────────────────────────────── */}
+        {Object.entries(grouped).map(([priority, items]) => {
+          if (items.length === 0) return null;
+          const meta = PRIORITY_META[priority] ?? PRIORITY_META.Low;
+          const groupMinutes = items.reduce((sum, r) => sum + (r.estimated_duration_minutes ?? 0), 0);
+
+          return (
+            <View key={priority} className="mb-10">
+
+              {/* Section heading row */}
+              <View
+                className="mb-5 flex-row items-center justify-between rounded-xl px-4 py-3"
+                style={{
+                  backgroundColor: meta.bg,
+                  borderLeftWidth: 4,
+                  borderLeftColor: meta.borderColor,
+                  borderWidth: 1,
+                  borderColor: meta.borderColor + '30',
+                }}
+              >
+                <View className="flex-row items-center gap-2.5">
+                  <View
+                    className="w-2.5 h-2.5 rounded-full"
+                    style={{ backgroundColor: meta.dotColor }}
+                  />
+                  <Text className="font-bold text-sm uppercase tracking-widest" style={{ color: meta.textColor }}>
+                    {meta.label}
+                  </Text>
+                  {/* Count chip */}
+                  <View
+                    className="rounded-full px-2 py-0.5"
+                    style={{ backgroundColor: meta.borderColor + '20' }}
+                  >
+                    <Text className="text-xs font-bold" style={{ color: meta.dotColor }}>
+                      {items.length}
+                    </Text>
+                  </View>
+                </View>
+                {/* Group duration hint */}
+                <View className="flex-row items-center gap-1">
+                  <Ionicons name="time-outline" size={12} color={meta.dotColor} />
+                  <Text className="text-xs font-medium" style={{ color: meta.textColor }}>±{groupMinutes} mnt</Text>
+                </View>
               </View>
-              
-              <View className="flex-row flex-wrap -mx-2">
+
+              {/* Recommendation grid: 3-col on lg, 2-col on md, 1-col on small */}
+              <View className="flex-row flex-wrap" style={{ marginHorizontal: -8 }}>
                 {items.map((item, idx) => (
-                  <View key={idx} className="w-full md:w-1/2 px-2">
-                    <RecommendationCard recommendation={item} />
+                  <View key={idx} className="w-full md:w-1/2 lg:w-1/3" style={{ paddingHorizontal: 8 }}>
+                    <RecommendationCard
+                      recommendation={item}
+                      priorityLabel={priority as 'High' | 'Medium' | 'Low'}
+                    />
                   </View>
                 ))}
               </View>
+
             </View>
-          )
-        ))}
+          );
+        })}
+
       </View>
     </ScrollView>
   );

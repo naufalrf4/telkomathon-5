@@ -1,3 +1,6 @@
+// Re-export chat types for convenience — canonical source is src/types/chat.ts
+export type { ChatMessage, ChatHistory } from './chat';
+
 export interface Document {
   id: string;
   filename: string;

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Platform, ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AlertBanner } from '../../src/components/ui/AlertBanner';
@@ -17,6 +17,7 @@ import {
   emptyLearningJourney,
   getSyllabusStatusLabel,
   getSyllabusStatusVariant,
+  syllabusDocxFilename,
   syllabusTitle,
 } from '../../src/utils/syllabus';
 import type { LearningJourneyStage } from '../../src/types/api';
@@ -44,11 +45,22 @@ const DETAIL_TABS: Array<{ value: DetailTab; label: string }> = [
 
 type DetailTab = 'overview' | 'modules' | 'journey' | 'revision';
 
+function triggerBrowserDownload(blob: Blob, filename: string) {
+  const blobUrl = window.URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = blobUrl;
+  anchor.download = filename;
+  anchor.click();
+  window.URL.revokeObjectURL(blobUrl);
+}
+
 export default function SyllabusDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
-  const { syllabus, isLoading, error, refetch } = useSyllabus(id as string);
+  const { syllabus, isLoading, error, refetch, downloadSyllabusDocxAsync, isDownloadingSyllabusDocx } = useSyllabus(id as string);
   const [activeTab, setActiveTab] = useState<DetailTab>('overview');
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportSuccess, setExportSuccess] = useState<string | null>(null);
   const journey = syllabus?.journey ?? emptyLearningJourney();
   const currentVersion = (syllabus?.revision_history.length ?? 0) + 1;
   const latestRevision = syllabus?.revision_history[syllabus.revision_history.length - 1] ?? null;
@@ -101,13 +113,27 @@ export default function SyllabusDetailScreen() {
     );
   }
 
+  const handleExportDocx = async () => {
+    setExportError(null);
+    setExportSuccess(null);
+
+    try {
+      const blob = await downloadSyllabusDocxAsync();
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        triggerBrowserDownload(blob, syllabusDocxFilename(syllabus));
+      }
+      setExportSuccess('File DOCX berhasil disiapkan untuk diunduh.');
+    } catch (downloadError) {
+      setExportError(getErrorMessage(downloadError, 'Export DOCX belum berhasil dibuat.'));
+    }
+  };
+
   return (
     <ScrollView className="flex-1 bg-neutral-50" showsVerticalScrollIndicator={false}>
       <View className="mx-auto w-full max-w-7xl gap-6 p-4 lg:p-8">
         <PageHeader
           eyebrow="Hasil kurikulum"
           title={syllabusTitle(syllabus)}
-          description="Hasil akhir ini sekarang dipusatkan pada tiga aksi utama: personalisasi, revisi, dan ekspor. Pilihan mode single-user atau multi-user baru ditentukan setelah Anda masuk ke area personalisasi."
           actions={
             <>
               <Button
@@ -123,10 +149,11 @@ export default function SyllabusDetailScreen() {
                 onPress={() => router.push(`/syllabus/${id}/revision`)}
               />
               <Button
-                title="Ekspor"
+                title="Export DOCX"
                 variant="outline"
                 icon={<Ionicons name="download-outline" size={18} color={colors.textSecondary} />}
-                onPress={() => router.push(`/syllabus/${id}/export`)}
+                onPress={() => void handleExportDocx()}
+                isLoading={isDownloadingSyllabusDocx}
               />
             </>
           }
@@ -138,6 +165,9 @@ export default function SyllabusDetailScreen() {
             </View>
           }
         />
+
+        {exportError ? <AlertBanner variant="error" title="Export DOCX belum berhasil" description={exportError} /> : null}
+        {exportSuccess ? <AlertBanner variant="success" title="Export DOCX siap" description={exportSuccess} /> : null}
 
         <View className="grid gap-4 lg:grid-cols-3">
           {headlinePoints.map((point) => (
@@ -151,7 +181,7 @@ export default function SyllabusDetailScreen() {
         <Card className="border-primary-100 bg-primary-50">
           <View className="gap-4 lg:flex-row lg:items-start lg:justify-between">
             <View className="flex-1 gap-2">
-              <Text className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Konteks siap pakai</Text>
+              <Text className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Ringkasan perusahaan</Text>
               <Text className="text-lg font-semibold text-neutral-950">{syllabus.client_company_name || 'Perusahaan belum diisi'}</Text>
               <Text className="text-sm leading-6 text-neutral-700">
                 {syllabus.company_profile_summary || syllabus.commercial_overview || 'Ringkasan perusahaan belum tersedia.'}
@@ -216,11 +246,6 @@ export default function SyllabusDetailScreen() {
 
         {activeTab === 'revision' ? (
           <View className="gap-4">
-            <AlertBanner
-              variant="info"
-              title="Aksi lanjutan dipusatkan di bagian atas"
-              description="Gunakan tombol Revisi untuk membuka workspace perubahan, atau lanjut ke Personalisasi untuk memilih single-user atau multi-user dari area yang sama."
-            />
             <Card className="border-neutral-300 bg-surface shadow-sm">
               <Text className="text-sm font-semibold text-neutral-950">Riwayat revisi</Text>
               <View className="mt-4 gap-3">

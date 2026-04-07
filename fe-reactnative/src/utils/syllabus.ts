@@ -31,3 +31,12 @@ export function emptyLearningJourney(): LearningJourney {
 export function syllabusTitle(syllabus: Syllabus): string {
   return syllabus.course_title?.trim() || syllabus.topic;
 }
+
+export function syllabusDocxFilename(syllabus: Syllabus): string {
+  const normalized = syllabusTitle(syllabus)
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, '')
+    .replace(/\s+/g, '-')
+    .toLowerCase();
+  return `${normalized || 'syllabus'}.docx`;
+}
