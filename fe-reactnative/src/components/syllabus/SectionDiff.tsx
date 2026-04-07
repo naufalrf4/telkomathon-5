@@ -3,10 +3,10 @@ import { Card } from '../ui/Card';
 import type { Syllabus, ELO, LearningJourneyStage } from '../../types/api';
 
 const SECTION_LABELS: Record<string, string> = {
-  tlo: 'Tujuan Akhir Pembelajaran',
-  performance_result: 'Target Performa',
-  condition_result: 'Kondisi Belajar',
-  standard_result: 'Standar Hasil',
+  tlo: 'Tujuan Akhir Pembelajaran (TLO)',
+  performance_result: 'Performance (PCS)',
+  condition_result: 'Condition (PCS)',
+  standard_result: 'Standard (PCS)',
   elos: 'Modul Belajar (ELO)',
   'journey.pre_learning': 'Tahap Pra-Pembelajaran',
   'journey.classroom': 'Tahap Kelas',

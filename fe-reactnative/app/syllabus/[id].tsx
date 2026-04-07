@@ -23,9 +23,9 @@ import {
 import type { LearningJourneyStage } from '../../src/types/api';
 
 const PCS_LABELS = [
-  { title: 'Target performa', key: 'performance' },
-  { title: 'Kondisi belajar', key: 'condition' },
-  { title: 'Standar hasil', key: 'standard' },
+  { title: 'Performance (PCS)', key: 'performance' },
+  { title: 'Condition (PCS)', key: 'condition' },
+  { title: 'Standard (PCS)', key: 'standard' },
 ] as const;
 
 const LEVEL_LABELS: Record<number, string> = {
@@ -204,7 +204,7 @@ export default function SyllabusDetailScreen() {
                   <Ionicons name="trophy-outline" size={24} color={colors.primary} />
                 </View>
                 <View className="flex-1">
-                  <Text className="mb-1 text-sm font-bold uppercase tracking-wider text-primary">Tujuan akhir pembelajaran</Text>
+                  <Text className="mb-1 text-sm font-bold uppercase tracking-wider text-primary">Tujuan Akhir Pembelajaran (TLO)</Text>
                   <Text className="text-lg font-medium leading-relaxed text-neutral-950">{syllabus.tlo}</Text>
                 </View>
               </View>
@@ -229,7 +229,7 @@ export default function SyllabusDetailScreen() {
         {activeTab === 'modules' ? (
           <Card className="border-neutral-300 bg-surface shadow-sm">
             <View className="mb-4 flex-row items-center justify-between">
-              <Text className="text-xl font-bold text-neutral-950">Modul belajar pendukung</Text>
+              <Text className="text-xl font-bold text-neutral-950">Modul Belajar (ELO)</Text>
               <Badge label={`${syllabus.elos.length} ELO`} variant="default" />
             </View>
             <ELOAccordion elos={syllabus.elos} />

@@ -132,7 +132,7 @@ function SyllabusPreview({
       <View className="gap-5 p-1 pb-6">
         <Card className={`border-neutral-200 shadow-sm transition-colors ${sectionClassName('tlo')}`}>
           <Text className="mb-2 text-xs font-bold uppercase tracking-[0.15em] text-neutral-500">
-            Tujuan Akhir Pembelajaran
+            Tujuan Akhir Pembelajaran (TLO)
           </Text>
           <Text className="text-sm leading-7 text-neutral-950">{syllabus.tlo}</Text>
         </Card>
@@ -140,23 +140,23 @@ function SyllabusPreview({
         {(syllabus.performance_result || syllabus.condition_result || syllabus.standard_result) && (
           <Card className="gap-4 border-neutral-200 bg-surface shadow-sm">
             <Text className="text-xs font-bold uppercase tracking-[0.15em] text-neutral-500">
-              Kriteria Hasil Belajar
+              Performance, Condition, Standard (PCS)
             </Text>
             {syllabus.performance_result ? (
               <View className={`rounded-xl border px-4 py-3.5 transition-colors ${sectionClassName('performance_result')}`}>
-                <Text className="mb-1 text-xs font-semibold text-neutral-500">Target Performa</Text>
+                <Text className="mb-1 text-xs font-semibold text-neutral-500">Performance (PCS)</Text>
                 <Text className="text-sm leading-6 text-neutral-950">{syllabus.performance_result}</Text>
               </View>
             ) : null}
             {syllabus.condition_result ? (
               <View className={`rounded-xl border px-4 py-3.5 transition-colors ${sectionClassName('condition_result')}`}>
-                <Text className="mb-1 text-xs font-semibold text-neutral-500">Kondisi Belajar</Text>
+                <Text className="mb-1 text-xs font-semibold text-neutral-500">Condition (PCS)</Text>
                 <Text className="text-sm leading-6 text-neutral-950">{syllabus.condition_result}</Text>
               </View>
             ) : null}
             {syllabus.standard_result ? (
               <View className={`rounded-xl border px-4 py-3.5 transition-colors ${sectionClassName('standard_result')}`}>
-                <Text className="mb-1 text-xs font-semibold text-neutral-500">Standar Hasil</Text>
+                <Text className="mb-1 text-xs font-semibold text-neutral-500">Standard (PCS)</Text>
                 <Text className="text-sm leading-6 text-neutral-950">{syllabus.standard_result}</Text>
               </View>
             ) : null}

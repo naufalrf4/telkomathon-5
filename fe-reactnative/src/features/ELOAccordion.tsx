@@ -38,7 +38,7 @@ export function ELOAccordion({ elos }: ELOAccordionProps) {
 
           {expandedIndex === index ? (
             <View className="border-t border-neutral-300 bg-surface p-4">
-              <Text className="text-xs font-bold uppercase text-neutral-400">Capability statement</Text>
+              <Text className="text-xs font-bold uppercase text-neutral-400">Deskripsi ELO</Text>
               <Text className="mt-2 text-sm leading-6 text-neutral-700">{item.elo}</Text>
             </View>
           ) : null}
