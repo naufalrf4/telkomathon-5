@@ -1,27 +1,27 @@
-import { useEffect, useMemo, useState } from 'react';
-import { View, Text } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useMutation } from '@tanstack/react-query';
-import { Card } from '../src/components/ui/Card';
-import { Button } from '../src/components/ui/Button';
-import { AlertBanner } from '../src/components/ui/AlertBanner';
-import { TextField } from '../src/components/ui/TextField';
-import { AuthLayout } from '../src/components/auth/AuthLayout';
-import { appQueryClient } from '../src/queryClient';
-import { getErrorMessage } from '../src/services/api';
-import { getMe, login } from '../src/services/auth';
-import { useAuthStore } from '../src/stores/authStore';
+import { useEffect, useMemo, useState } from "react";
+import { View, Text } from "react-native";
+import { useRouter } from "expo-router";
+import { useMutation } from "@tanstack/react-query";
+import { Card } from "../src/components/ui/Card";
+import { Button } from "../src/components/ui/Button";
+import { AlertBanner } from "../src/components/ui/AlertBanner";
+import { TextField } from "../src/components/ui/TextField";
+import { AuthLayout } from "../src/components/auth/AuthLayout";
+import { appQueryClient } from "../src/queryClient";
+import { getErrorMessage } from "../src/services/api";
+import { getMe, login } from "../src/services/auth";
+import { useAuthStore } from "../src/stores/authStore";
 
 export default function LoginPage() {
   const router = useRouter();
   const { accessToken, hydrated, setSession } = useAuthStore();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (hydrated && accessToken) {
-      router.replace('/');
+      router.replace("/");
     }
   }, [accessToken, hydrated, router]);
 
@@ -36,19 +36,23 @@ export default function LoginPage() {
       } catch {
         // keep initial session payload if /me is temporarily unavailable
       }
-      router.replace('/');
+      router.replace("/");
     },
-    onError: (mutationError) => setError(getErrorMessage(mutationError, 'Login gagal.')),
+    onError: (mutationError) =>
+      setError(getErrorMessage(mutationError, "Login gagal.")),
   });
 
-  const canSubmit = useMemo(() => email.trim() && password.trim(), [email, password]);
+  const canSubmit = useMemo(
+    () => email.trim() && password.trim(),
+    [email, password],
+  );
 
   return (
     <AuthLayout
       title="Masuk untuk lanjut bekerja"
       description="Buka kembali kurikulum aktif dan lanjutkan penyesuaian belajar tanpa kehilangan progres."
       formTitle="Masuk"
-      formDescription="Gunakan akun Anda untuk membuka ruang kerja yang terakhir dipakai."
+      formDescription="Gunakan akun Anda untuk membuka workspace terakhir."
     >
       <View className="gap-4">
         <TextField
@@ -70,15 +74,32 @@ export default function LoginPage() {
 
       {error ? (
         <View className="mt-4">
-          <AlertBanner variant="error" title="Masuk belum berhasil" description={error} />
+          <AlertBanner
+            variant="error"
+            title="Masuk belum berhasil"
+            description={error}
+          />
         </View>
       ) : null}
 
       <View className="mt-6 gap-3">
-        <Button title="Masuk" onPress={() => loginMutation.mutate({ email: email.trim(), password })} disabled={!canSubmit} isLoading={loginMutation.isPending} fullWidth />
+        <Button
+          title="Masuk"
+          onPress={() =>
+            loginMutation.mutate({ email: email.trim(), password })
+          }
+          disabled={!canSubmit}
+          isLoading={loginMutation.isPending}
+          fullWidth
+        />
         <View className="mt-2 flex-row justify-center">
           <Text className="text-neutral-600">Belum punya akun? </Text>
-          <Text onPress={() => router.push('/register')} className="text-primary-600 font-medium">Daftar sekarang</Text>
+          <Text
+            onPress={() => router.push("/register")}
+            className="text-primary-600 font-medium"
+          >
+            Daftar sekarang
+          </Text>
         </View>
       </View>
     </AuthLayout>

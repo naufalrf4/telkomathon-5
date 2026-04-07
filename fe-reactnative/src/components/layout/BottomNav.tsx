@@ -16,6 +16,7 @@ interface MenuItem {
 
 const MENU_ITEMS: MenuItem[] = [
   { href: '/', label: 'Dashboard', icon: 'grid-outline', matchExact: true },
+  { href: '/syllabus/create', label: 'Create', icon: 'add-circle-outline' },
   { href: '/syllabus/generated', label: 'Kurikulum', icon: 'library-outline' },
   { href: '/personalize', label: 'Personalisasi', icon: 'sparkles-outline' },
 ];

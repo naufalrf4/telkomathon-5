@@ -15,28 +15,13 @@ interface MenuItem {
   label: string;
   icon: IoniconsName;
   matchExact?: boolean;
-  children?: Array<{
-    href: Href;
-    label: string;
-  }>;
 }
 
 const MENU_ITEMS: MenuItem[] = [
   { href: '/', label: 'Dashboard', icon: 'grid-outline', matchExact: true },
-  {
-    href: '/syllabus',
-    label: 'Syllabus',
-    icon: 'library-outline',
-    children: [
-      { href: '/syllabus/create', label: 'Create' },
-      { href: '/syllabus/generated', label: 'Library' },
-    ],
-  },
-  {
-    href: '/personalize',
-    label: 'Personalisasi',
-    icon: 'sparkles-outline',
-  },
+  { href: '/syllabus/create', label: 'Create', icon: 'add-circle-outline' },
+  { href: '/syllabus/generated', label: 'Library', icon: 'library-outline' },
+  { href: '/personalize', label: 'Personalisasi', icon: 'sparkles-outline' },
 ];
 
 function isMenuActive(pathname: string, href: string, exact?: boolean): boolean {
@@ -66,7 +51,6 @@ export function Sidebar() {
               resizeMode="contain"
             />
           </View>
-          <Text className="mt-3 text-sm leading-6 text-neutral-600">Susun kurikulum, lanjutkan draf aktif, lalu buat rekomendasi belajar dari satu alur kerja.</Text>
         </View>
 
         <View className="px-3">
@@ -98,22 +82,6 @@ export function Sidebar() {
                   </Pressable>
                 </Link>
 
-                {active && item.children?.length ? (
-                  <View className="mb-3 ml-6 mt-1 gap-1 border-l border-neutral-300 pl-4">
-                    {item.children.map((child) => {
-                      const childActive = pathname === child.href || pathname.startsWith(`${String(child.href)}/`);
-                      return (
-                        <Link key={String(child.href)} href={child.href} asChild>
-                          <Pressable className={clsx('rounded-md px-2 py-2', childActive ? 'bg-primary-50' : 'hover:bg-neutral-100')}>
-                            <Text className={clsx('text-sm', childActive ? 'font-semibold text-primary-700' : 'font-medium text-neutral-600 hover:text-neutral-700')}>
-                              {child.label}
-                            </Text>
-                          </Pressable>
-                        </Link>
-                      );
-                    })}
-                  </View>
-                ) : null}
               </View>
             );
           })}

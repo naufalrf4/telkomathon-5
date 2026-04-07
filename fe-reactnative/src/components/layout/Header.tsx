@@ -14,7 +14,6 @@ function getPageMeta(pathname: string): { title: string; subtitle: string } {
   if (PAGE_META[pathname]) return PAGE_META[pathname];
   if (pathname.startsWith('/syllabus/create/')) return { title: 'Susun kurikulum', subtitle: 'Ikuti langkah yang sedang aktif hingga kurikulum siap dipakai.' };
   if (pathname.match(/^\/syllabus\/[^/]+\/revision$/)) return { title: 'Tinjau dan revisi', subtitle: 'Perbarui kurikulum final sebelum digunakan untuk personalisasi.' };
-  if (pathname.match(/^\/syllabus\/[^/]+\/export$/)) return { title: 'Ekspor kurikulum', subtitle: 'Unduh kurikulum final dalam format yang siap dibagikan.' };
   if (pathname.match(/^\/personalize\/[^/]+\/bulk$/)) return { title: 'Personalisasi multi-user', subtitle: 'Siapkan rekomendasi untuk banyak peserta sekaligus.' };
   if (pathname.startsWith('/design-session/')) return { title: 'Susun kurikulum', subtitle: 'Ikuti langkah yang sedang aktif hingga kurikulum siap dipakai.' };
   if (pathname.startsWith('/syllabus/')) return { title: 'Detail kurikulum', subtitle: 'Tinjau hasil akhir dan lanjutkan ke personalisasi.' };

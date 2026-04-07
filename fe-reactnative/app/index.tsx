@@ -110,20 +110,13 @@ export default function DashboardScreen() {
     >
       <PageHeader
         eyebrow="Langkah kerja"
-        title="Mulai dari kurikulum, lanjut ke rekomendasi belajar"
-        description="Gunakan dashboard ini untuk memilih langkah berikutnya: mulai kurikulum baru, lanjutkan draf aktif, atau buka kurikulum final untuk personalisasi."
+        title="Pilih langkah kerja berikutnya"
         actions={(
           <>
             <Button title="Buat kurikulum" onPress={() => router.push('/syllabus/create')} />
             {activeSession ? <Button title="Lanjutkan draf" variant="outline" onPress={() => router.push(`/syllabus/create/${activeSession.id}`)} /> : null}
             <Button title="Buka personalisasi" variant="outline" onPress={() => router.push('/personalize')} />
           </>
-        )}
-        aside={(
-          <View className="gap-1">
-            <Text className="text-xs font-semibold uppercase tracking-[0.2em] text-primary-600">Fokus hari ini</Text>
-            <Text className="text-sm text-neutral-600">Buat kurikulum, selesaikan draf, lalu personalisasi hasilnya.</Text>
-          </View>
         )}
       />
 
@@ -156,10 +149,6 @@ export default function DashboardScreen() {
               <Text className="text-neutral-500">
                 Diperbarui {new Date(activeSession.updated_at).toLocaleDateString('id-ID')} • {activeSession.document_ids.length} dokumen sumber
               </Text>
-              <View className="mt-2 rounded-xl bg-primary-50 px-4 py-3">
-                <Text className="text-xs font-semibold uppercase tracking-[0.2em] text-primary-600">Langkah berikutnya</Text>
-                <Text className="mt-1 text-sm text-neutral-700">Buka draf ini untuk menyelesaikan tahap aktif lalu finalkan kurikulum sebelum membuat personalisasi.</Text>
-              </View>
             </View>
           </Card>
         </View>
@@ -184,7 +173,7 @@ export default function DashboardScreen() {
             <View style={{ flex: isDesktop ? 1 : undefined }}>
               <QuickActionCard
                 title="Lanjutkan draf"
-                description="Buka tahap terakhir yang belum selesai lalu teruskan penyusunan kurikulum."
+                description="Lanjutkan tahap terakhir yang belum selesai."
                 iconName="play"
                 onPress={() => router.push(`/syllabus/create/${activeSession.id}`)}
                 color={colors.warning}
@@ -194,7 +183,7 @@ export default function DashboardScreen() {
           <View style={{ flex: isDesktop ? 1 : undefined }}>
               <QuickActionCard
                 title="Buat kurikulum"
-                description="Unggah materi, pilih opsi terbaik, lalu finalkan kurikulum baru."
+                description="Unggah materi dan finalkan kurikulum baru."
                 iconName="cloud-upload"
                 onPress={() => router.push('/syllabus/create')}
                 color={colors.primary}
@@ -203,7 +192,7 @@ export default function DashboardScreen() {
           <View style={{ flex: isDesktop ? 1 : undefined }}>
               <QuickActionCard
                 title="Buka kurikulum"
-                description="Lihat kurikulum final yang siap dipakai sebagai dasar personalisasi."
+                description="Buka kurikulum final yang sudah siap dipakai."
                 iconName="library"
                 onPress={() => router.push('/syllabus/generated')}
                 color={colors.info}
@@ -212,7 +201,7 @@ export default function DashboardScreen() {
             <View style={{ flex: isDesktop ? 1 : undefined }}>
               <QuickActionCard
                 title="Buat rekomendasi"
-                description="Pilih kurikulum final lalu lanjutkan ke single-user atau multi-user."
+                description="Masuk ke personalisasi dari kurikulum final."
                 iconName="library"
                 onPress={() => router.push('/personalize')}
                 color={colors.textMuted ?? '#94A3B8'}
