@@ -29,6 +29,7 @@ class DesignSession(Base):
     selected_performance: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
     elo_options: Mapped[list[dict[str, object]]] = mapped_column(JSONB, default=list)
     selected_elos: Mapped[list[dict[str, object]]] = mapped_column(JSONB, default=list)
+    ai_preview_sections: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
     finalized_syllabus_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(

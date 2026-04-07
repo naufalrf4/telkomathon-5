@@ -97,6 +97,18 @@ class SyllabusService:
             journey_value: dict[str, object] = self._normalize_journey(data["journey"])
             syllabus.journey = journey_value
 
+        generation_meta = dict(syllabus.generation_meta or {})
+        if applied_fields:
+            revision_source = "revision_chat" if source_message_id else "manual_revision"
+            for field_name in applied_fields:
+                generation_meta[field_name] = {
+                    "source": revision_source,
+                    "prompt_version": None,
+                    "grounded_with": ["revision_request"],
+                    "source_message_id": str(source_message_id) if source_message_id else None,
+                }
+            syllabus.generation_meta = generation_meta
+
         syllabus.revision_history = history
         syllabus.updated_at = datetime.utcnow()
         await self.db.flush()
@@ -149,8 +161,10 @@ class SyllabusService:
         condition_result: str | None,
         standard_result: str | None,
         elos: Sequence[dict[str, object]],
+        journey: dict[str, object],
         source_doc_ids: Sequence[str],
         owner_id: uuid.UUID | None = None,
+        generation_meta: dict[str, object] | None = None,
     ) -> GeneratedSyllabus:
         syllabus = GeneratedSyllabus(
             topic=topic,
@@ -165,9 +179,10 @@ class SyllabusService:
             condition_result=self._normalize_optional_text(condition_result),
             standard_result=self._normalize_optional_text(standard_result),
             elos=self._normalize_elos(elos),
-            journey=self._build_default_journey(topic, tlo, performance_result),
+            journey=self._normalize_journey(journey),
             source_doc_ids=list(source_doc_ids),
             revision_history=[],
+            generation_meta=generation_meta,
             status="finalized",
             owner_id=owner_id,
         )

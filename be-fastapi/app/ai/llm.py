@@ -27,7 +27,13 @@ async def chat_complete(
         content = response.choices[0].message.content
         return content or ""
     except Exception as exc:
-        raise AIServiceException(f"LLM completion failed: {exc}") from exc
+        raise AIServiceException(
+            _format_azure_error(
+                "LLM completion failed",
+                exc,
+                deployment=settings.AZURE_OPENAI_CHAT_DEPLOYMENT,
+            )
+        ) from exc
 
 
 async def chat_complete_json(
@@ -48,7 +54,13 @@ async def chat_complete_json(
             raise ValueError("LLM JSON response must be an object")
         return parsed
     except Exception as exc:
-        raise AIServiceException(f"LLM JSON completion failed: {exc}") from exc
+        raise AIServiceException(
+            _format_azure_error(
+                "LLM JSON completion failed",
+                exc,
+                deployment=settings.AZURE_OPENAI_CHAT_DEPLOYMENT,
+            )
+        ) from exc
 
 
 async def _stream_response(
@@ -70,7 +82,13 @@ async def _stream_response(
             if delta:
                 yield delta
     except Exception as exc:
-        raise AIServiceException(f"LLM stream failed: {exc}") from exc
+        raise AIServiceException(
+            _format_azure_error(
+                "LLM stream failed",
+                exc,
+                deployment=settings.AZURE_OPENAI_CHAT_DEPLOYMENT,
+            )
+        ) from exc
 
 
 def _validate_finish_reason(finish_reason: str | None) -> None:
@@ -78,3 +96,10 @@ def _validate_finish_reason(finish_reason: str | None) -> None:
         raise AIServiceException("LLM response blocked by content filter")
     if finish_reason == "length":
         raise AIServiceException("LLM response truncated before completion")
+
+
+def _format_azure_error(prefix: str, exc: Exception, *, deployment: str) -> str:
+    return (
+        f"{prefix}: {exc} | azure_endpoint={settings.AZURE_OPENAI_ENDPOINT} "
+        f"| api_version={settings.AZURE_OPENAI_API_VERSION} | deployment={deployment}"
+    )

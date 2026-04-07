@@ -1,6 +1,7 @@
 import re
 import uuid
 from collections.abc import Sequence
+from difflib import SequenceMatcher
 from typing import Any, cast
 
 from sqlalchemy import select
@@ -12,6 +13,7 @@ from app.ai.prompts.design_sessions import (
     build_source_summary_prompt,
     build_tlo_options_prompt,
 )
+from app.ai.prompts.syllabus import build_final_syllabus_sections_prompt
 from app.exceptions import (
     AIServiceException,
     AlreadyFinalizedException,
@@ -24,6 +26,8 @@ from app.features.design_sessions.schemas import CourseContextRequest, DesignSes
 from app.features.documents.models import Document
 from app.features.syllabus.models import GeneratedSyllabus
 from app.features.syllabus.service import SyllabusService
+
+_FINAL_SYNTHESIS_PROMPT_VERSION = "final-synthesis-v1"
 
 
 def build_default_journey(topic: str) -> dict[str, object]:
@@ -304,9 +308,17 @@ def matches_tlo_level(text: str, target_level: int) -> bool:
         return False
     allowed = _allowed_tlo_verbs(target_level)
     disallowed = _disallowed_tlo_verbs(target_level)
+    generic_disallowed = (
+        "memahami",
+        "mengetahui",
+        "mempelajari",
+        "menguasai",
+        "mengapresiasi",
+    )
     has_allowed = any(f" {verb} " in f" {normalized} " for verb in allowed)
     has_disallowed = any(f" {verb} " in f" {normalized} " for verb in disallowed)
-    return has_allowed and not has_disallowed
+    has_generic_disallowed = any(f" {verb} " in f" {normalized} " for verb in generic_disallowed)
+    return has_allowed and not has_disallowed and not has_generic_disallowed
 
 
 def _extract_company_profile_focus(documents: Sequence[Document]) -> list[str]:
@@ -426,7 +438,7 @@ class DesignSessionService:
         self, request: DesignSessionCreateRequest, *, owner_id: uuid.UUID | None = None
     ) -> DesignSession:
         documents = await self._get_ready_documents(request.document_ids)
-        source_summary = fallback_source_summary(documents)
+        source_summary = await self._generate_source_summary(documents)
         session = DesignSession(
             document_ids=[str(item) for item in request.document_ids],
             owner_id=owner_id,
@@ -484,10 +496,11 @@ class DesignSessionService:
         )
         self._ensure_not_finalized(session)
         documents = await self._get_ready_documents(self._document_ids_from_session(session))
-        session.source_summary = await self._generate_source_summary(documents)
+        generated_source_summary = await self._generate_source_summary(documents)
+        session.source_summary = generated_source_summary
         session.course_context = self._merge_prefill_course_context(
             session.course_context,
-            session.source_summary,
+            generated_source_summary,
         )
         if session.wizard_step == "uploaded":
             session.wizard_step = "summary_ready"
@@ -676,6 +689,10 @@ class DesignSessionService:
             raise ValidationException("At least one ELO option must be selected")
         session.selected_elos = selected
         session.wizard_step = "elo_selected"
+        try:
+            session.ai_preview_sections = await self._generate_preview_sections(session)
+        except Exception:
+            session.ai_preview_sections = None
         await self.db.flush()
         await self.db.refresh(session)
         self._attach_preview_fields(session)
@@ -700,21 +717,47 @@ class DesignSessionService:
         if not session.selected_elos:
             raise InvalidStepException("elo-selection must be completed before finalize")
 
+        company_profile_summary = self._company_profile_summary(source_summary)
+        commercial_overview, commercial_overview_source = self._resolve_commercial_overview(
+            course_context,
+            company_profile_summary,
+        )
+        final_sections = await self._generate_final_sections(
+            source_summary=source_summary,
+            course_context=course_context,
+            selected_tlo=selected_tlo,
+            selected_performance=selected_performance,
+            selected_elos=session.selected_elos,
+            company_profile_summary=company_profile_summary,
+            commercial_overview=commercial_overview,
+        )
+
         syllabus = await SyllabusService(self.db).create_finalized_syllabus(
             topic=self._course_topic(course_context),
             target_level=self._course_target_level(course_context),
             course_category=self._optional_course_text(course_context, "course_category"),
             client_company_name=self._optional_course_text(course_context, "client_company_name"),
             course_title=self._course_title(course_context),
-            company_profile_summary=self._company_profile_summary(source_summary),
-            commercial_overview=self._commercial_overview(course_context),
+            company_profile_summary=company_profile_summary,
+            commercial_overview=commercial_overview,
             tlo=str(selected_tlo["text"]),
             performance_result=str(selected_performance["text"]),
-            condition_result=self._build_condition_result(course_context, selected_performance),
-            standard_result=self._build_standard_result(session.selected_elos),
+            condition_result=str(final_sections["condition_result"]),
+            standard_result=str(final_sections["standard_result"]),
             elos=self._serialize_selected_elos(session.selected_elos),
+            journey=cast(dict[str, object], final_sections["journey"]),
             source_doc_ids=list(session.document_ids),
             owner_id=session.owner_id,
+            generation_meta=self._build_generation_meta(
+                company_profile_summary=company_profile_summary,
+                commercial_overview=commercial_overview,
+                commercial_overview_source=commercial_overview_source,
+                source_summary=source_summary,
+                course_context=course_context,
+                selected_tlo=selected_tlo,
+                selected_performance=selected_performance,
+                selected_elos=session.selected_elos,
+            ),
         )
 
         session.finalized_syllabus_id = syllabus.id
@@ -724,20 +767,58 @@ class DesignSessionService:
         self._attach_preview_fields(session)
         return session, syllabus
 
+    async def _generate_preview_sections(
+        self,
+        session: DesignSession,
+    ) -> dict[str, object]:
+        source_summary = self._require_source_summary(session)
+        course_context = self._require_course_context(session)
+        selected_tlo = self._require_selected_tlo(session)
+        selected_performance = self._require_selected_performance(session)
+        company_profile_summary = self._company_profile_summary(source_summary)
+        commercial_overview, _ = self._resolve_commercial_overview(
+            course_context,
+            company_profile_summary,
+        )
+        final_sections = await self._generate_final_sections(
+            source_summary=source_summary,
+            course_context=course_context,
+            selected_tlo=selected_tlo,
+            selected_performance=selected_performance,
+            selected_elos=session.selected_elos,
+            company_profile_summary=company_profile_summary,
+            commercial_overview=commercial_overview,
+        )
+        return {
+            "condition_result": str(final_sections["condition_result"]),
+            "standard_result": str(final_sections["standard_result"]),
+        }
+
     def _attach_preview_fields(self, session: DesignSession) -> None:
         preview_condition_result: str | None = None
         preview_standard_result: str | None = None
 
-        if isinstance(session.course_context, dict) and isinstance(
-            session.selected_performance, dict
+        ai_sections = session.ai_preview_sections
+        if (
+            isinstance(ai_sections, dict)
+            and isinstance(ai_sections.get("condition_result"), str)
+            and ai_sections["condition_result"]
+            and isinstance(ai_sections.get("standard_result"), str)
+            and ai_sections["standard_result"]
         ):
-            preview_condition_result = self._build_condition_result(
-                session.course_context,
-                session.selected_performance,
-            )
+            preview_condition_result = str(ai_sections["condition_result"])
+            preview_standard_result = str(ai_sections["standard_result"])
+        else:
+            if isinstance(session.course_context, dict) and isinstance(
+                session.selected_performance, dict
+            ):
+                preview_condition_result = self._build_condition_result(
+                    session.course_context,
+                    session.selected_performance,
+                )
 
-        if isinstance(session.selected_elos, list):
-            preview_standard_result = self._build_standard_result(session.selected_elos)
+            if isinstance(session.selected_elos, list):
+                preview_standard_result = self._build_standard_result(session.selected_elos)
 
         preview_session = cast(Any, session)
         preview_session.preview_condition_result = preview_condition_result
@@ -855,9 +936,287 @@ class DesignSessionService:
         additional_context = self._optional_course_text(course_context, "additional_context")
         return additional_context
 
+    def _resolve_commercial_overview(
+        self,
+        course_context: dict[str, object],
+        company_profile_summary: str | None,
+    ) -> tuple[str | None, str]:
+        explicit_overview = self._optional_course_text(course_context, "commercial_overview")
+        if explicit_overview and not _texts_too_similar(explicit_overview, company_profile_summary):
+            return explicit_overview, "user_input"
+
+        additional_context = self._optional_course_text(course_context, "additional_context")
+        if additional_context and not _texts_too_similar(
+            additional_context, company_profile_summary
+        ):
+            return additional_context, "course_context"
+
+        return None, "omitted"
+
     def _normalize_export_text(self, value: str) -> str:
         normalized = " ".join(value.replace("\r", " ").split())
         return normalized.lstrip("$ ").strip()
+
+    async def _generate_final_sections(
+        self,
+        *,
+        source_summary: dict[str, object],
+        course_context: dict[str, object],
+        selected_tlo: dict[str, object],
+        selected_performance: dict[str, object],
+        selected_elos: Sequence[dict[str, object]],
+        company_profile_summary: str | None,
+        commercial_overview: str | None,
+    ) -> dict[str, object]:
+        retry_notes = ""
+        selected_performance_text = str(selected_performance["text"])
+        selected_elo_texts = [
+            str(item.get("elo", "")).strip()
+            for item in selected_elos
+            if isinstance(item, dict) and str(item.get("elo", "")).strip()
+        ]
+
+        for _ in range(2):
+            payload = await chat_complete_json(
+                build_final_syllabus_sections_prompt(
+                    topic=self._course_topic(course_context),
+                    target_level=self._course_target_level(course_context),
+                    source_summary=str(source_summary.get("summary", "")).strip(),
+                    company_profile_summary=company_profile_summary or "",
+                    commercial_overview=commercial_overview or "",
+                    course_category=self._optional_course_text(course_context, "course_category")
+                    or "",
+                    additional_context=self._optional_course_text(
+                        course_context, "additional_context"
+                    )
+                    or "",
+                    selected_tlo=str(selected_tlo["text"]),
+                    selected_performance=selected_performance_text,
+                    selected_elos=selected_elo_texts,
+                    retry_notes=retry_notes,
+                )
+            )
+            normalized = self._normalize_final_sections_payload(payload)
+            issues = self._collect_final_section_issues(
+                performance_result=selected_performance_text,
+                condition_result=str(normalized["condition_result"]),
+                standard_result=str(normalized["standard_result"]),
+                journey=cast(dict[str, object], normalized["journey"]),
+            )
+            if not issues:
+                return normalized
+            retry_notes = "; ".join(issues)
+
+        raise ValidationException(
+            "AI generated overlapping or incomplete final syllabus sections. Please retry finalization."
+        )
+
+    def _normalize_final_sections_payload(self, payload: dict[str, object]) -> dict[str, object]:
+        condition_result = self._normalize_export_text(str(payload.get("condition_result", "")))
+        standard_result = self._normalize_export_text(str(payload.get("standard_result", "")))
+        journey_payload = payload.get("journey")
+        if not isinstance(journey_payload, dict):
+            raise ValidationException("Final syllabus synthesis must include a journey object")
+
+        return {
+            "condition_result": condition_result,
+            "standard_result": standard_result,
+            "journey": self._normalize_learning_journey(journey_payload),
+        }
+
+    def _normalize_learning_journey(self, value: dict[str, object]) -> dict[str, object]:
+        return {
+            "pre_learning": self._normalize_learning_stage(value.get("pre_learning")),
+            "classroom": self._normalize_learning_stage(value.get("classroom")),
+            "after_learning": self._normalize_learning_stage(value.get("after_learning")),
+        }
+
+    def _normalize_learning_stage(self, value: object) -> dict[str, object]:
+        stage = value if isinstance(value, dict) else {}
+        method_value = stage.get("method") if isinstance(stage, dict) else []
+        content_value = stage.get("content") if isinstance(stage, dict) else []
+        method = self._dedupe_text_list(method_value)
+        content = self._dedupe_text_list(content_value)
+        return {
+            "duration": self._normalize_export_text(str(stage.get("duration", ""))).strip()
+            if isinstance(stage, dict)
+            else "",
+            "method": method,
+            "description": self._normalize_export_text(str(stage.get("description", ""))).strip()
+            if isinstance(stage, dict)
+            else "",
+            "content": content,
+        }
+
+    def _dedupe_text_list(self, value: object) -> list[str]:
+        if isinstance(value, str):
+            items = [value]
+        elif isinstance(value, list):
+            items = [item for item in value if isinstance(item, str)]
+        else:
+            items = []
+
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for item in items:
+            normalized = self._normalize_export_text(item)
+            key = normalized.casefold()
+            if not normalized or key in seen:
+                continue
+            seen.add(key)
+            deduped.append(normalized)
+        return deduped
+
+    def _collect_final_section_issues(
+        self,
+        *,
+        performance_result: str,
+        condition_result: str,
+        standard_result: str,
+        journey: dict[str, object],
+    ) -> list[str]:
+        issues: list[str] = []
+        for label, value in (
+            ("condition_result", condition_result),
+            ("standard_result", standard_result),
+        ):
+            if not value.strip():
+                issues.append(f"{label} must not be empty")
+
+        if _texts_too_similar(performance_result, condition_result):
+            issues.append("condition_result repeats performance_result")
+        if _texts_too_similar(performance_result, standard_result):
+            issues.append("standard_result repeats performance_result")
+        if _texts_too_similar(condition_result, standard_result):
+            issues.append("standard_result repeats condition_result")
+
+        stage_texts: dict[str, str] = {}
+        for stage_name in ("pre_learning", "classroom", "after_learning"):
+            raw_stage = journey.get(stage_name)
+            if not isinstance(raw_stage, dict):
+                issues.append(f"journey.{stage_name} must be an object")
+                continue
+            duration = str(raw_stage.get("duration", "")).strip()
+            description = str(raw_stage.get("description", "")).strip()
+            method = cast(list[str], raw_stage.get("method", []))
+            content = cast(list[str], raw_stage.get("content", []))
+            if not duration:
+                issues.append(f"journey.{stage_name}.duration must not be empty")
+            if not description:
+                issues.append(f"journey.{stage_name}.description must not be empty")
+            if not method:
+                issues.append(f"journey.{stage_name}.method must not be empty")
+            if not content:
+                issues.append(f"journey.{stage_name}.content must not be empty")
+
+            stage_text = " ".join([description, *method, *content]).strip()
+            stage_texts[stage_name] = stage_text
+            if _texts_too_similar(stage_text, performance_result):
+                issues.append(f"journey.{stage_name} repeats performance_result")
+            if _texts_too_similar(stage_text, condition_result):
+                issues.append(f"journey.{stage_name} repeats condition_result")
+            if _texts_too_similar(stage_text, standard_result):
+                issues.append(f"journey.{stage_name} repeats standard_result")
+
+        for left, right in (
+            ("pre_learning", "classroom"),
+            ("pre_learning", "after_learning"),
+            ("classroom", "after_learning"),
+        ):
+            if _texts_too_similar(stage_texts.get(left, ""), stage_texts.get(right, "")):
+                issues.append(f"journey.{left} repeats journey.{right}")
+
+        return issues
+
+    def _build_generation_meta(
+        self,
+        *,
+        company_profile_summary: str | None,
+        commercial_overview: str | None,
+        commercial_overview_source: str,
+        source_summary: dict[str, object],
+        course_context: dict[str, object],
+        selected_tlo: dict[str, object],
+        selected_performance: dict[str, object],
+        selected_elos: Sequence[dict[str, object]],
+    ) -> dict[str, object]:
+        _ = source_summary, course_context, selected_tlo, selected_performance, selected_elos
+        meta: dict[str, object] = {
+            "tlo": {
+                "source": "ai_option_selected",
+                "prompt_version": "tlo-options-v1",
+                "grounded_with": ["source_summary", "course_context"],
+            },
+            "performance_result": {
+                "source": "ai_option_selected",
+                "prompt_version": "performance-options-v1",
+                "grounded_with": ["source_summary", "course_context", "selected_tlo"],
+            },
+            "elos": {
+                "source": "ai_option_selected",
+                "prompt_version": "elo-options-v1",
+                "grounded_with": [
+                    "source_summary",
+                    "course_context",
+                    "selected_tlo",
+                    "selected_performance",
+                ],
+            },
+            "condition_result": {
+                "source": "ai_final_synthesis",
+                "prompt_version": _FINAL_SYNTHESIS_PROMPT_VERSION,
+                "grounded_with": [
+                    "source_summary",
+                    "company_profile_summary",
+                    "commercial_overview",
+                    "course_context",
+                    "selected_tlo",
+                    "selected_performance",
+                    "selected_elos",
+                ],
+            },
+            "standard_result": {
+                "source": "ai_final_synthesis",
+                "prompt_version": _FINAL_SYNTHESIS_PROMPT_VERSION,
+                "grounded_with": [
+                    "source_summary",
+                    "company_profile_summary",
+                    "commercial_overview",
+                    "course_context",
+                    "selected_tlo",
+                    "selected_performance",
+                    "selected_elos",
+                ],
+            },
+            "journey": {
+                "source": "ai_final_synthesis",
+                "prompt_version": _FINAL_SYNTHESIS_PROMPT_VERSION,
+                "grounded_with": [
+                    "source_summary",
+                    "company_profile_summary",
+                    "commercial_overview",
+                    "course_context",
+                    "selected_tlo",
+                    "selected_performance",
+                    "selected_elos",
+                ],
+            },
+        }
+
+        if company_profile_summary:
+            meta["company_profile_summary"] = {
+                "source": "source_summary",
+                "prompt_version": "source-summary-v1",
+                "grounded_with": ["documents"],
+            }
+        if commercial_overview:
+            meta["commercial_overview"] = {
+                "source": commercial_overview_source,
+                "prompt_version": None,
+                "grounded_with": ["course_context"],
+            }
+
+        return meta
 
     def _normalize_company_profile_summary(self, value: str, focus_points: Sequence[str]) -> str:
         normalized_lines = [line.strip() for line in value.replace("\r", "\n").split("\n")]
@@ -955,6 +1314,7 @@ class DesignSessionService:
         session.selected_performance = None
         session.elo_options = []
         session.selected_elos = []
+        session.ai_preview_sections = None
         session.finalized_syllabus_id = None
 
     def _reset_after_tlo_selection(self, session: DesignSession) -> None:
@@ -962,11 +1322,13 @@ class DesignSessionService:
         session.selected_performance = None
         session.elo_options = []
         session.selected_elos = []
+        session.ai_preview_sections = None
         session.finalized_syllabus_id = None
 
     def _reset_after_performance_selection(self, session: DesignSession) -> None:
         session.elo_options = []
         session.selected_elos = []
+        session.ai_preview_sections = None
         session.finalized_syllabus_id = None
 
     async def _generate_source_summary(self, documents: Sequence[Document]) -> dict[str, object]:
@@ -1041,6 +1403,29 @@ class DesignSessionService:
             and payload_company_confidence.strip().lower() in {"high", "medium", "low"}
             else cast(str | None, fallback.get("company_profile_confidence"))
         )
+        company_profile_summary = explicit_company_profile_summary
+        if not company_profile_summary:
+            for candidate in (
+                cast(str | None, fallback.get("company_profile_summary")),
+                _build_indonesian_company_profile_summary(
+                    normalized_focus[:5] or fallback_focus[:3] or normalized_key_points[:3]
+                ),
+                normalized_summary,
+                cast(str | None, fallback.get("summary")),
+            ):
+                if not candidate:
+                    continue
+                if company_profile_summary is None and not _texts_too_similar(
+                    candidate, normalized_summary
+                ):
+                    company_profile_summary = candidate
+                    break
+            if company_profile_summary is None:
+                company_profile_summary = normalized_summary or cast(
+                    str,
+                    fallback["summary"],
+                )
+
         return {
             "summary": normalized_summary or fallback["summary"],
             "key_points": (normalized_key_points[:5] or fallback["key_points"]),
@@ -1048,10 +1433,7 @@ class DesignSessionService:
             or fallback_focus[:3]
             or fallback["company_profile_focus"],
             "company_name": normalized_company_name,
-            "company_profile_summary": explicit_company_profile_summary
-            or normalized_summary
-            or fallback.get("company_profile_summary")
-            or fallback["summary"],
+            "company_profile_summary": company_profile_summary,
             "company_profile_confidence": company_profile_confidence or "medium",
         }
 
@@ -1300,6 +1682,26 @@ def _looks_like_low_signal_profile_point(value: str) -> bool:
         "laporan tahunan",
     )
     return any(marker in lowered for marker in low_signal_markers)
+
+
+def _texts_too_similar(left: str | None, right: str | None) -> bool:
+    normalized_left = _normalize_similarity_text(left)
+    normalized_right = _normalize_similarity_text(right)
+    if not normalized_left or not normalized_right:
+        return False
+    if normalized_left == normalized_right:
+        return True
+    if len(normalized_left) >= 40 and normalized_left in normalized_right:
+        return True
+    if len(normalized_right) >= 40 and normalized_right in normalized_left:
+        return True
+    return SequenceMatcher(None, normalized_left, normalized_right).ratio() >= 0.9
+
+
+def _normalize_similarity_text(value: str | None) -> str:
+    if not value:
+        return ""
+    return re.sub(r"\W+", " ", value.casefold()).strip()
 
 
 def _capitalize_sentences(sentences: Sequence[str]) -> str:

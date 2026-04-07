@@ -1,17 +1,18 @@
 from datetime import UTC, datetime, timedelta
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 from uuid import uuid4
 
 import pytest
 
-from app.exceptions import AlreadyFinalizedException
+from app.exceptions import AIServiceException, AlreadyFinalizedException
 from app.features.design_sessions.models import DesignSession
-from app.features.design_sessions.schemas import CourseContextRequest
+from app.features.design_sessions.schemas import CourseContextRequest, DesignSessionCreateRequest
 from app.features.design_sessions.service import (
     DesignSessionService,
     fallback_elo_options,
     fallback_source_summary,
     fallback_tlo_options,
+    matches_tlo_level,
     normalize_text_options,
 )
 from app.features.documents.models import Document
@@ -52,7 +53,7 @@ class FakeExecuteResult:
 
     def scalar_one_or_none(self) -> DesignSession | Document | None:
         value = self._items[0] if self._items else None
-        if isinstance(value, (DesignSession, Document)):
+        if isinstance(value, DesignSession | Document):
             return value
         return None
 
@@ -83,16 +84,28 @@ async def test_create_session_prefills_company_context(monkeypatch: pytest.Monke
 
     service = DesignSessionService(SessionCreateDB())
 
+    async def fake_generate_source_summary(_documents: object) -> dict[str, object]:
+        return {
+            "summary": "Ringkasan AI",
+            "key_points": ["Poin AI 1"],
+            "company_name": "PT Demo AI",
+            "company_profile_summary": "PT Demo AI berfokus pada transformasi layanan digital lintas fungsi.",
+            "company_profile_confidence": "high",
+            "company_profile_focus": ["transformasi layanan digital lintas fungsi"],
+        }
+
+    monkeypatch.setattr(service, "_generate_source_summary", fake_generate_source_summary)
+
     created = await service.create_session(
-        type("Request", (), {"document_ids": [document_id]})(),
+        DesignSessionCreateRequest(document_ids=[document_id]),
     )
 
     assert created.wizard_step == "summary_ready"
     assert created.source_summary is not None
-    assert created.source_summary["company_name"] == "PT Demo"
+    assert created.source_summary["company_name"] == "PT Demo AI"
     assert created.course_context is not None
-    assert created.course_context["client_company_name"] == "PT Demo"
-    assert str(created.course_context["commercial_overview"]).startswith("PT Demo bergerak")
+    assert created.course_context["client_company_name"] == "PT Demo AI"
+    assert str(created.course_context["commercial_overview"]).startswith("PT Demo AI berfokus")
 
 
 @pytest.mark.asyncio
@@ -429,7 +442,46 @@ async def test_finalize_sets_syllabus_link(monkeypatch: pytest.MonkeyPatch) -> N
         captured_kwargs.update(kwargs)
         return syllabus
 
+    async def fake_chat_complete_json(_messages: object) -> dict[str, object]:
+        return {
+            "condition_result": "Peserta menunjukkan performa dalam studi kasus operasional yang relevan dengan kebutuhan analitik perusahaan.",
+            "standard_result": "Keberhasilan peserta diukur melalui ketepatan insight, ketuntasan analisis, dan kejelasan rekomendasi yang dapat ditindaklanjuti.",
+            "journey": {
+                "pre_learning": {
+                    "duration": "60 menit",
+                    "method": ["Belajar mandiri terarah", "Review materi pengantar"],
+                    "description": "Peserta membangun pemahaman awal terhadap konteks analitik data yang akan digunakan di kelas.",
+                    "content": [
+                        "Peran analitik data dalam proses kerja",
+                        "Istilah inti dan indikator data dasar",
+                    ],
+                },
+                "classroom": {
+                    "duration": "240 menit",
+                    "method": ["Workshop terpandu", "Diskusi studi kasus"],
+                    "description": "Peserta mempraktikkan pembacaan data dan penyusunan insight melalui latihan terstruktur.",
+                    "content": [
+                        "Membaca dashboard operasional",
+                        "Menyusun insight berbasis data",
+                        "Membuat rekomendasi perbaikan",
+                    ],
+                },
+                "after_learning": {
+                    "duration": "120 menit",
+                    "method": ["Tugas penerapan mandiri", "Umpan balik atasan atau fasilitator"],
+                    "description": "Peserta menerapkan hasil belajar pada konteks kerja sederhana dan menyiapkan tindak lanjut.",
+                    "content": [
+                        "Penerapan insight pada kasus kerja",
+                        "Rencana tindak lanjut berbasis data",
+                    ],
+                },
+            },
+        }
+
     monkeypatch.setattr(service, "get_session", fake_get_session)
+    monkeypatch.setattr(
+        "app.features.design_sessions.service.chat_complete_json", fake_chat_complete_json
+    )
     monkeypatch.setattr(
         "app.features.syllabus.service.SyllabusService.create_finalized_syllabus",
         fake_create_finalized_syllabus,
@@ -448,8 +500,180 @@ async def test_finalize_sets_syllabus_link(monkeypatch: pytest.MonkeyPatch) -> N
     )
     assert captured_kwargs["commercial_overview"] == "Program akselerasi analitik."
     assert captured_kwargs["performance_result"] == "Performance"
-    assert isinstance(captured_kwargs["condition_result"], str)
-    assert isinstance(captured_kwargs["standard_result"], str)
+    assert captured_kwargs["condition_result"] == (
+        "Peserta menunjukkan performa dalam studi kasus operasional yang relevan dengan kebutuhan analitik perusahaan."
+    )
+    assert captured_kwargs["standard_result"] == (
+        "Keberhasilan peserta diukur melalui ketepatan insight, ketuntasan analisis, dan kejelasan rekomendasi yang dapat ditindaklanjuti."
+    )
+    assert captured_kwargs["journey"] == {
+        "pre_learning": {
+            "duration": "60 menit",
+            "method": ["Belajar mandiri terarah", "Review materi pengantar"],
+            "description": "Peserta membangun pemahaman awal terhadap konteks analitik data yang akan digunakan di kelas.",
+            "content": [
+                "Peran analitik data dalam proses kerja",
+                "Istilah inti dan indikator data dasar",
+            ],
+        },
+        "classroom": {
+            "duration": "240 menit",
+            "method": ["Workshop terpandu", "Diskusi studi kasus"],
+            "description": "Peserta mempraktikkan pembacaan data dan penyusunan insight melalui latihan terstruktur.",
+            "content": [
+                "Membaca dashboard operasional",
+                "Menyusun insight berbasis data",
+                "Membuat rekomendasi perbaikan",
+            ],
+        },
+        "after_learning": {
+            "duration": "120 menit",
+            "method": ["Tugas penerapan mandiri", "Umpan balik atasan atau fasilitator"],
+            "description": "Peserta menerapkan hasil belajar pada konteks kerja sederhana dan menyiapkan tindak lanjut.",
+            "content": [
+                "Penerapan insight pada kasus kerja",
+                "Rencana tindak lanjut berbasis data",
+            ],
+        },
+    }
+    generation_meta = cast(dict[str, object], captured_kwargs["generation_meta"])
+    assert (
+        cast(dict[str, object], generation_meta["condition_result"])["source"]
+        == "ai_final_synthesis"
+    )
+    assert (
+        cast(dict[str, object], generation_meta["journey"])["prompt_version"]
+        == "final-synthesis-v1"
+    )
+    assert cast(dict[str, object], generation_meta["commercial_overview"])["source"] == "user_input"
+
+
+@pytest.mark.asyncio
+async def test_finalize_retries_when_final_sections_overlap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = FakeAsyncSession()
+    service = DesignSessionService(db)
+    session = DesignSession(
+        id=uuid4(),
+        document_ids=[str(uuid4())],
+        wizard_step="elo_selected",
+        source_summary={"summary": "Ringkasan bisnis", "key_points": ["Poin 1"]},
+        course_context={
+            "topic": "Data Analytics",
+            "target_level": 3,
+            "additional_context": "",
+            "course_category": "Technical",
+            "client_company_name": "PT Demo",
+            "course_title": "Data Analytics Bootcamp",
+            "commercial_overview": "Program analitik data untuk tim operasional.",
+        },
+        selected_tlo={"id": "tlo-1", "text": "TLO", "rationale": "ok"},
+        selected_performance={"id": "performance-1", "text": "Performance", "rationale": "ok"},
+        selected_elos=[{"id": "elo-1", "elo": "ELO 1", "rationale": "ok"}],
+    )
+    syllabus = GeneratedSyllabus(
+        id=uuid4(),
+        topic="Data Analytics",
+        target_level=3,
+        course_category="Technical",
+        client_company_name="PT Demo",
+        course_title="Data Analytics Bootcamp",
+        company_profile_summary="Ringkasan perusahaan",
+        commercial_overview="Program analitik data untuk tim operasional.",
+        tlo="TLO",
+        performance_result="Performance",
+        condition_result="Condition",
+        standard_result="Standard",
+        elos=[{"elo": "ELO 1"}],
+        journey={
+            "pre_learning": {"duration": "30 menit", "description": "x", "content": ["x"]},
+            "classroom": {"duration": "1 hari", "description": "x", "content": ["x"]},
+            "after_learning": {"duration": "1 minggu", "description": "x", "content": ["x"]},
+        },
+        source_doc_ids=[],
+        revision_history=[],
+        status="finalized",
+    )
+
+    async def fake_get_session(_: object) -> DesignSession:
+        return session
+
+    captured_kwargs: dict[str, object] = {}
+
+    async def fake_create_finalized_syllabus(_self: object, **kwargs: object) -> GeneratedSyllabus:
+        captured_kwargs.update(kwargs)
+        return syllabus
+
+    responses: list[dict[str, object]] = [
+        {
+            "condition_result": "Performance",
+            "standard_result": "Performance",
+            "journey": {
+                "pre_learning": {
+                    "duration": "60 menit",
+                    "method": ["Belajar mandiri"],
+                    "description": "Performance",
+                    "content": ["Performance"],
+                },
+                "classroom": {
+                    "duration": "240 menit",
+                    "method": ["Workshop"],
+                    "description": "Performance",
+                    "content": ["Performance"],
+                },
+                "after_learning": {
+                    "duration": "120 menit",
+                    "method": ["Tugas mandiri"],
+                    "description": "Performance",
+                    "content": ["Performance"],
+                },
+            },
+        },
+        {
+            "condition_result": "Peserta menunjukkan performa pada studi kasus data operasional yang relevan dengan kebutuhan tim.",
+            "standard_result": "Keberhasilan peserta ditunjukkan melalui akurasi insight dan ketepatan rekomendasi yang dapat dijalankan.",
+            "journey": {
+                "pre_learning": {
+                    "duration": "60 menit",
+                    "method": ["Belajar mandiri terstruktur"],
+                    "description": "Peserta menyiapkan pemahaman awal tentang konteks data operasional.",
+                    "content": ["Pengantar metrik operasional", "Istilah inti analitik data"],
+                },
+                "classroom": {
+                    "duration": "240 menit",
+                    "method": ["Workshop praktik", "Diskusi studi kasus"],
+                    "description": "Peserta berlatih membaca data dan membangun insight dari kasus yang disediakan.",
+                    "content": ["Membaca dashboard", "Menghubungkan data dengan keputusan kerja"],
+                },
+                "after_learning": {
+                    "duration": "120 menit",
+                    "method": ["Tugas penerapan", "Umpan balik hasil"],
+                    "description": "Peserta menindaklanjuti pembelajaran melalui penerapan sederhana di pekerjaan.",
+                    "content": ["Rencana tindak lanjut", "Review hasil penerapan"],
+                },
+            },
+        },
+    ]
+
+    async def fake_chat_complete_json(_messages: object) -> dict[str, object]:
+        return responses.pop(0)
+
+    monkeypatch.setattr(service, "get_session", fake_get_session)
+    monkeypatch.setattr(
+        "app.features.design_sessions.service.chat_complete_json", fake_chat_complete_json
+    )
+    monkeypatch.setattr(
+        "app.features.syllabus.service.SyllabusService.create_finalized_syllabus",
+        fake_create_finalized_syllabus,
+    )
+
+    _ = await service.finalize(uuid4())
+
+    assert captured_kwargs["condition_result"] == (
+        "Peserta menunjukkan performa pada studi kasus data operasional yang relevan dengan kebutuhan tim."
+    )
+    assert responses == []
 
 
 def test_normalize_text_options_uses_prefix() -> None:
@@ -502,3 +726,148 @@ def test_fallback_tlo_options_follow_level_family() -> None:
 
     assert first_text.startswith("Peserta mampu mengidentifikasi")
     assert "mengevaluasi" in second_level_four_text.lower()
+
+
+def test_matches_tlo_level_rejects_generic_non_measurable_verbs() -> None:
+    assert not matches_tlo_level("Peserta mampu memahami dasar machine learning.", 1)
+    assert not matches_tlo_level("Peserta mampu menerapkan dan memahami workflow data.", 3)
+    assert not matches_tlo_level("Peserta mampu menguasai evaluasi model.", 4)
+    assert matches_tlo_level("Peserta mampu menerapkan workflow data untuk kasus kerja.", 3)
+
+
+@pytest.mark.asyncio
+async def test_select_elos_populates_ai_preview_sections(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = FakeAsyncSession()
+    service = DesignSessionService(db)
+    session = DesignSession(
+        document_ids=[str(uuid4())],
+        wizard_step="elo_options_ready",
+        source_summary={"summary": "Ringkasan", "key_points": ["Poin 1"]},
+        course_context={
+            "topic": "Data Analytics",
+            "target_level": 3,
+            "additional_context": "",
+        },
+        selected_tlo={"id": "tlo-1", "text": "TLO 1", "rationale": "ok"},
+        selected_performance={"id": "performance-1", "text": "Perf 1", "rationale": "ok"},
+        elo_options=[
+            {"id": "elo-1", "elo": "ELO 1", "rationale": "ok"},
+            {"id": "elo-2", "elo": "ELO 2", "rationale": "ok"},
+        ],
+    )
+
+    async def fake_get_session(_: object) -> DesignSession:
+        return session
+
+    async def fake_generate_final_sections(**_kwargs: object) -> dict[str, object]:
+        return {
+            "condition_result": "cond",
+            "standard_result": "std",
+            "journey": {},
+        }
+
+    monkeypatch.setattr(service, "get_session", fake_get_session)
+    monkeypatch.setattr(service, "_generate_final_sections", fake_generate_final_sections)
+
+    result = await service.select_elos(uuid4(), ["elo-1"])
+
+    assert isinstance(result.ai_preview_sections, dict)
+    assert result.ai_preview_sections["condition_result"] == "cond"
+    assert result.ai_preview_sections["standard_result"] == "std"
+
+
+@pytest.mark.asyncio
+async def test_select_elos_ai_preview_failure_is_silenced(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = FakeAsyncSession()
+    service = DesignSessionService(db)
+    session = DesignSession(
+        document_ids=[str(uuid4())],
+        wizard_step="elo_options_ready",
+        source_summary={"summary": "Ringkasan", "key_points": ["Poin 1"]},
+        course_context={
+            "topic": "Data Analytics",
+            "target_level": 3,
+            "additional_context": "",
+        },
+        selected_tlo={"id": "tlo-1", "text": "TLO 1", "rationale": "ok"},
+        selected_performance={"id": "performance-1", "text": "Perf 1", "rationale": "ok"},
+        elo_options=[
+            {"id": "elo-1", "elo": "ELO 1", "rationale": "ok"},
+        ],
+    )
+
+    async def fake_get_session(_: object) -> DesignSession:
+        return session
+
+    async def fake_generate_final_sections(**_kwargs: object) -> dict[str, object]:
+        raise AIServiceException("AI failed")
+
+    monkeypatch.setattr(service, "get_session", fake_get_session)
+    monkeypatch.setattr(service, "_generate_final_sections", fake_generate_final_sections)
+
+    result = await service.select_elos(uuid4(), ["elo-1"])
+
+    assert result.ai_preview_sections is None
+
+
+@pytest.mark.asyncio
+async def test_attach_preview_fields_uses_ai_sections_when_available() -> None:
+    service = DesignSessionService(FakeAsyncSession())
+    session = DesignSession(
+        document_ids=[str(uuid4())],
+        wizard_step="elo_selected",
+        source_summary={"summary": "Ringkasan", "key_points": ["Poin 1"]},
+        course_context={
+            "topic": "Data Analytics",
+            "target_level": 3,
+            "additional_context": "",
+        },
+        selected_tlo={"id": "tlo-1", "text": "TLO 1", "rationale": "ok"},
+        selected_performance={"id": "performance-1", "text": "Perf 1", "rationale": "ok"},
+        selected_elos=[{"id": "elo-1", "elo": "ELO 1", "rationale": "ok"}],
+        ai_preview_sections={
+            "condition_result": "AI cond",
+            "standard_result": "AI std",
+        },
+    )
+
+    service._attach_preview_fields(session)
+
+    preview_session = cast(Any, session)
+    assert preview_session.preview_condition_result == "AI cond"
+    assert preview_session.preview_standard_result == "AI std"
+
+
+@pytest.mark.asyncio
+async def test_attach_preview_fields_falls_back_to_template_when_no_ai_sections() -> None:
+    service = DesignSessionService(FakeAsyncSession())
+    session = DesignSession(
+        document_ids=[str(uuid4())],
+        wizard_step="elo_selected",
+        source_summary={"summary": "Ringkasan", "key_points": ["Poin 1"]},
+        course_context={
+            "topic": "Data Analytics",
+            "target_level": 3,
+            "additional_context": "",
+        },
+        selected_tlo={"id": "tlo-1", "text": "TLO 1", "rationale": "ok"},
+        selected_performance={"id": "performance-1", "text": "Perf 1", "rationale": "ok"},
+        selected_elos=[{"id": "elo-1", "elo": "ELO 1", "rationale": "ok"}],
+        ai_preview_sections=None,
+    )
+
+    service._attach_preview_fields(session)
+
+    preview_session = cast(Any, session)
+    preview_condition = preview_session.preview_condition_result
+    preview_standard = preview_session.preview_standard_result
+    assert preview_condition is not None
+    assert preview_standard is not None
+    assert preview_condition != "AI cond"
+    assert preview_standard != "AI std"
+    assert "Peserta menunjukkan performa" in preview_condition
+    assert "Keberhasilan peserta diukur" in preview_standard

@@ -161,3 +161,138 @@ async def test_apply_revision_updates_revision_history() -> None:
         "journey",
     ]
     assert service.db.added == []
+    assert syllabus.generation_meta == {
+        "tlo": {
+            "source": "revision_chat",
+            "prompt_version": None,
+            "grounded_with": ["revision_request"],
+            "source_message_id": str(message_id),
+        },
+        "performance_result": {
+            "source": "revision_chat",
+            "prompt_version": None,
+            "grounded_with": ["revision_request"],
+            "source_message_id": str(message_id),
+        },
+        "condition_result": {
+            "source": "revision_chat",
+            "prompt_version": None,
+            "grounded_with": ["revision_request"],
+            "source_message_id": str(message_id),
+        },
+        "standard_result": {
+            "source": "revision_chat",
+            "prompt_version": None,
+            "grounded_with": ["revision_request"],
+            "source_message_id": str(message_id),
+        },
+        "elos": {
+            "source": "revision_chat",
+            "prompt_version": None,
+            "grounded_with": ["revision_request"],
+            "source_message_id": str(message_id),
+        },
+        "journey": {
+            "source": "revision_chat",
+            "prompt_version": None,
+            "grounded_with": ["revision_request"],
+            "source_message_id": str(message_id),
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_create_finalized_syllabus_persists_ai_journey_and_generation_meta() -> None:
+    db = FakeRevisionSession(
+        GeneratedSyllabus(
+            id=uuid4(),
+            topic="placeholder",
+            target_level=1,
+            course_category=None,
+            client_company_name=None,
+            course_title=None,
+            company_profile_summary=None,
+            commercial_overview=None,
+            tlo="placeholder",
+            performance_result=None,
+            condition_result=None,
+            standard_result=None,
+            elos=[{"elo": "placeholder"}],
+            journey={
+                "pre_learning": {"duration": "", "method": [], "description": "", "content": []},
+                "classroom": {"duration": "", "method": [], "description": "", "content": []},
+                "after_learning": {"duration": "", "method": [], "description": "", "content": []},
+            },
+            source_doc_ids=[],
+            revision_history=[],
+            status="draft",
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+    )
+    service = SyllabusService(db)
+
+    result = await service.create_finalized_syllabus(
+        topic="Data Analytics",
+        target_level=3,
+        course_category="Technical",
+        client_company_name="PT Demo",
+        course_title="Data Analytics Bootcamp",
+        company_profile_summary="Ringkasan perusahaan",
+        commercial_overview="Program analitik data untuk tim operasional.",
+        tlo="Peserta mampu membaca data operasional dan menyusun insight kerja.",
+        performance_result="Menyusun insight dari dashboard operasional.",
+        condition_result="Menggunakan studi kasus dan dashboard operasional yang relevan.",
+        standard_result="Insight yang dihasilkan akurat, jelas, dan dapat ditindaklanjuti.",
+        elos=[{"elo": "Mengidentifikasi metrik utama"}],
+        journey={
+            "pre_learning": {
+                "duration": "60 menit",
+                "method": ["Belajar mandiri"],
+                "description": "Orientasi awal",
+                "content": ["Pengantar analitik data"],
+            },
+            "classroom": {
+                "duration": "240 menit",
+                "method": ["Workshop"],
+                "description": "Latihan inti",
+                "content": ["Membaca dashboard", "Menyusun insight"],
+            },
+            "after_learning": {
+                "duration": "120 menit",
+                "method": ["Tugas penerapan"],
+                "description": "Tindak lanjut",
+                "content": ["Rencana aksi"],
+            },
+        },
+        source_doc_ids=[str(uuid4())],
+        generation_meta={
+            "condition_result": {"source": "ai_final_synthesis"},
+            "journey": {"source": "ai_final_synthesis"},
+        },
+    )
+
+    assert result.journey == {
+        "pre_learning": {
+            "duration": "60 menit",
+            "method": ["Belajar mandiri"],
+            "description": "Orientasi awal",
+            "content": ["Pengantar analitik data"],
+        },
+        "classroom": {
+            "duration": "240 menit",
+            "method": ["Workshop"],
+            "description": "Latihan inti",
+            "content": ["Membaca dashboard", "Menyusun insight"],
+        },
+        "after_learning": {
+            "duration": "120 menit",
+            "method": ["Tugas penerapan"],
+            "description": "Tindak lanjut",
+            "content": ["Rencana aksi"],
+        },
+    }
+    assert result.generation_meta == {
+        "condition_result": {"source": "ai_final_synthesis"},
+        "journey": {"source": "ai_final_synthesis"},
+    }

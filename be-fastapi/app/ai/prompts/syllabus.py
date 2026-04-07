@@ -86,3 +86,92 @@ Requirements:
 - All in Bahasa Indonesia
 - Level-appropriate complexity"""
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+
+def build_final_syllabus_sections_prompt(
+    *,
+    topic: str,
+    target_level: int,
+    source_summary: str,
+    company_profile_summary: str,
+    commercial_overview: str,
+    course_category: str,
+    additional_context: str,
+    selected_tlo: str,
+    selected_performance: str,
+    selected_elos: list[str],
+    retry_notes: str = "",
+) -> list[ChatCompletionMessageParam]:
+    system = (
+        "You are an expert curriculum designer. "
+        "Generate grounded syllabus sections based only on the provided context. "
+        "Return valid JSON only with keys 'condition_result', 'standard_result', and 'journey'. "
+        "Do not invent unsupported company facts, business claims, tools, or metrics. "
+        "All output must be natural Bahasa Indonesia."
+    )
+    user = f"""Lengkapi bagian akhir silabus berikut berdasarkan konteks yang diberikan.
+
+Kamu hanya boleh menggunakan informasi dari:
+- source summary
+- company profile summary
+- commercial overview
+- course category
+- additional context
+- selected TLO
+- selected performance
+- selected ELOs
+
+Jangan mengulang kalimat yang sama antar field. Setiap field harus punya fungsi yang berbeda:
+- condition_result = konteks, syarat, situasi, atau lingkungan saat performa ditunjukkan
+- standard_result = ukuran keberhasilan, mutu, atau bukti capaian
+- journey = rencana pembelajaran yang runtut dan konkret
+
+Aturan penting:
+- Jangan menyalin performance_result ke condition_result atau standard_result
+- Jangan membuat standard_result yang hanya mengulang condition_result
+- Setiap stage journey harus berbeda satu sama lain
+- `journey.*.method` berisi cara penyampaian pembelajaran, bukan daftar topik
+- `journey.*.content` berisi topik/modul konkret, bukan kalimat aktivitas fasilitator
+- Durasi boleh berupa estimasi instruksional yang wajar, tetapi jangan menambahkan fakta bisnis baru
+- Jika konteks terbatas, tetap spesifik namun konservatif; jangan berhalusinasi
+- Semua output dalam Bahasa Indonesia
+
+Return JSON dengan struktur exact ini:
+{{
+  "condition_result": "string",
+  "standard_result": "string",
+  "journey": {{
+    "pre_learning": {{
+      "duration": "string",
+      "method": ["string"],
+      "description": "string",
+      "content": ["string"]
+    }},
+    "classroom": {{
+      "duration": "string",
+      "method": ["string"],
+      "description": "string",
+      "content": ["string"]
+    }},
+    "after_learning": {{
+      "duration": "string",
+      "method": ["string"],
+      "description": "string",
+      "content": ["string"]
+    }}
+  }}
+}}
+
+Topic: {topic}
+Target level: {target_level}
+Course category: {course_category or "-"}
+Additional context: {additional_context or "-"}
+Source summary: {source_summary or "-"}
+Company profile summary: {company_profile_summary or "-"}
+Commercial overview: {commercial_overview or "-"}
+Selected TLO: {selected_tlo}
+Selected performance: {selected_performance}
+Selected ELOs: {selected_elos or ["-"]}
+Retry notes: {retry_notes or "-"}
+"""
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
