@@ -31,7 +31,7 @@ uploads/
 *.pdf
 *.docx
 *.pptx
-!be-fastapi/app/features/export/templates/*.docx
+!be-fastapi/app/features/syllabus/templates/*.docx
 
 # Node / Expo
 node_modules/
