@@ -17,12 +17,12 @@ import type { DesignOption, DesignSessionWizardStep, ELOOption } from '../../src
 const WIZARD_STEPS: Array<{ value: DesignSessionWizardStep; label: string }> = [
   { value: 'uploaded', label: 'Dokumen' },
   { value: 'summary_ready', label: 'Ringkasan & konteks' },
-  { value: 'course_context_set', label: 'Tujuan akhir' },
-  { value: 'tlo_options_ready', label: 'Pilih tujuan' },
-  { value: 'tlo_selected', label: 'Target performa' },
-  { value: 'performance_options_ready', label: 'Pilih performa' },
-  { value: 'performance_selected', label: 'Modul belajar' },
-  { value: 'elo_options_ready', label: 'Pilih modul' },
+  { value: 'course_context_set', label: 'Tujuan akhir (TLO)' },
+  { value: 'tlo_options_ready', label: 'Pilih TLO' },
+  { value: 'tlo_selected', label: 'Target performa (PCS)' },
+  { value: 'performance_options_ready', label: 'Pilih performa (PCS)' },
+  { value: 'performance_selected', label: 'Modul belajar (ELO)' },
+  { value: 'elo_options_ready', label: 'Pilih ELO' },
   { value: 'elo_selected', label: 'Finalisasi' },
   { value: 'finalized', label: 'Selesai' },
 ];
@@ -361,10 +361,10 @@ export default function DesignSessionScreen() {
             ) : null}
 
             {showGenerateTlo ? (
-              <Card title="Buat tujuan akhir" subtitle="Sistem akan menurunkan beberapa opsi tujuan akhir dari konteks kursus yang sudah Anda tetapkan.">
+              <Card title="Buat tujuan akhir (TLO)" subtitle="Sistem akan menurunkan beberapa opsi tujuan akhir (TLO) dari konteks kursus yang sudah Anda tetapkan.">
                 <Button
-                  title="Buat tujuan akhir"
-                  onPress={() => void runAction(() => generateTloOptions(), 'Opsi tujuan akhir berhasil dibuat.')}
+                  title="Buat TLO"
+                  onPress={() => void runAction(() => generateTloOptions(), 'Opsi TLO berhasil dibuat.')}
                   isLoading={isWorking}
                 />
               </Card>
@@ -372,45 +372,39 @@ export default function DesignSessionScreen() {
 
             {showSelectTlo ? (
               <OptionSelectionCard
-                title="Pilih tujuan akhir"
-                subtitle="Pilih satu tujuan yang paling mewakili hasil belajar akhir. Jika belum pas, coba opsi lain."
+                title="Pilih TLO"
+                subtitle="Pilih satu tujuan akhir (TLO) yang paling mewakili hasil belajar akhir. Jika belum pas, coba opsi lain."
                 options={session.tlo_options}
-                actionLabel="Gunakan tujuan ini"
+                actionLabel="Gunakan TLO ini"
                 isWorking={isWorking}
-                onSelect={(optionId) =>
-                  void runAction(() => selectTlo(optionId), 'Tujuan akhir berhasil dipilih.')
-                }
+                onSelect={(optionId) => void runAction(() => selectTlo(optionId), 'TLO berhasil dipilih.')}
                 secondaryActionLabel="Coba opsi lain"
-                onSecondaryAction={() =>
-                  void runAction(() => generateTloOptions(), 'Opsi tujuan akhir baru berhasil dibuat.')
-                }
+                onSecondaryAction={() => void runAction(() => generateTloOptions(), 'Opsi TLO baru berhasil dibuat.')}
               />
             ) : null}
 
             {showGeneratePerformance ? (
-              <Card title="Buat target performa" subtitle="Sistem akan menurunkan target performa yang mendukung tujuan akhir yang Anda pilih.">
+              <Card title="Buat target performa (PCS)" subtitle="Sistem akan menurunkan target performa (PCS) yang mendukung TLO yang Anda pilih.">
                 <View className="gap-4">
                   {session.selected_tlo ? (
                     <View className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
-                      <Text className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">Tujuan akhir terpilih</Text>
+                      <Text className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">TLO terpilih</Text>
                       <Text className="mt-2 text-sm leading-6 text-neutral-800">{session.selected_tlo.text}</Text>
                     </View>
                   ) : null}
                   <View className="flex-row flex-wrap gap-3">
                     <Button
-                      title="Coba opsi tujuan akhir lain"
+                      title="Coba opsi TLO lain"
                       variant="outline"
-                      onPress={() =>
-                        void runAction(() => generateTloOptions(), 'Opsi tujuan akhir baru berhasil dibuat.')
-                      }
+                      onPress={() => void runAction(() => generateTloOptions(), 'Opsi TLO baru berhasil dibuat.')}
                       isLoading={isWorking}
                     />
                     <Button
-                      title="Buat target performa"
+                      title="Buat PCS"
                       onPress={() =>
                         void runAction(
                           () => generatePerformanceOptions(),
-                          'Opsi target performa berhasil dibuat.'
+                          'Opsi PCS berhasil dibuat.'
                         )
                       }
                       isLoading={isWorking}
@@ -422,48 +416,46 @@ export default function DesignSessionScreen() {
 
             {showSelectPerformance ? (
               <OptionSelectionCard
-                title="Pilih target performa"
-                subtitle="Pilih satu target performa sebagai dasar modul belajar. Jika belum pas, coba opsi lain."
+                title="Pilih target performa (PCS)"
+                subtitle="Pilih satu target performa (PCS) sebagai dasar ELO. Jika belum pas, coba opsi lain."
                 options={session.performance_options}
-                actionLabel="Gunakan target ini"
+                actionLabel="Gunakan PCS ini"
                 isWorking={isWorking}
-                onSelect={(optionId) =>
-                  void runAction(() => selectPerformance(optionId), 'Target performa berhasil dipilih.')
-                }
+                onSelect={(optionId) => void runAction(() => selectPerformance(optionId), 'PCS berhasil dipilih.')}
                 secondaryActionLabel="Coba opsi lain"
                 onSecondaryAction={() =>
-                  void runAction(
-                    () => generatePerformanceOptions(),
-                    'Opsi target performa baru berhasil dibuat.'
-                  )
-                }
+                      void runAction(
+                        () => generatePerformanceOptions(),
+                        'Opsi PCS baru berhasil dibuat.'
+                      )
+                    }
               />
             ) : null}
 
             {showGenerateElo ? (
-              <Card title="Buat modul belajar" subtitle="Sistem akan membuat beberapa modul belajar dari target performa yang sudah dipilih.">
+              <Card title="Buat modul belajar (ELO)" subtitle="Sistem akan membuat beberapa ELO dari target performa (PCS) yang sudah dipilih.">
                 <View className="gap-4">
                   {session.selected_performance ? (
                     <View className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
-                      <Text className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">Target performa terpilih</Text>
+                      <Text className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">PCS terpilih</Text>
                       <Text className="mt-2 text-sm leading-6 text-neutral-800">{session.selected_performance.text}</Text>
                     </View>
                   ) : null}
                   <View className="flex-row flex-wrap gap-3">
                     <Button
-                      title="Coba opsi performa lain"
+                      title="Coba opsi PCS lain"
                       variant="outline"
                       onPress={() =>
                         void runAction(
                           () => generatePerformanceOptions(),
-                          'Opsi target performa baru berhasil dibuat.'
+                          'Opsi PCS baru berhasil dibuat.'
                         )
                       }
                       isLoading={isWorking}
                     />
                     <Button
-                      title="Buat modul belajar"
-                      onPress={() => void runAction(() => generateEloOptions(), 'Opsi modul belajar berhasil dibuat.')}
+                      title="Buat ELO"
+                      onPress={() => void runAction(() => generateEloOptions(), 'Opsi ELO berhasil dibuat.')}
                       isLoading={isWorking}
                     />
                   </View>
@@ -472,15 +464,13 @@ export default function DesignSessionScreen() {
             ) : null}
 
             {showSelectElo ? (
-              <Card title="Pilih modul belajar" subtitle="Anda dapat memilih lebih dari satu modul. Jika belum pas, buat ulang opsi agar hasilnya lebih cocok.">
+              <Card title="Pilih ELO" subtitle="Anda dapat memilih lebih dari satu ELO. Jika belum pas, buat ulang opsi agar hasilnya lebih cocok.">
                 <View className="gap-4">
                   <View className="flex-row justify-end">
                     <Button
                       title="Buat ulang opsi"
                       variant="outline"
-                      onPress={() =>
-                        void runAction(() => generateEloOptions(), 'Opsi modul belajar berhasil diperbarui.')
-                      }
+                      onPress={() => void runAction(() => generateEloOptions(), 'Opsi ELO berhasil diperbarui.')}
                       isLoading={isWorking}
                     />
                   </View>
@@ -509,11 +499,11 @@ export default function DesignSessionScreen() {
                     );
                   })}
                   <Button
-                    title="Simpan modul terpilih"
+                    title="Simpan ELO terpilih"
                     onPress={() =>
                       void runAction(
                         () => selectElos(selectedEloIds),
-                        'Modul belajar terpilih berhasil disimpan.'
+                        'ELO terpilih berhasil disimpan.'
                       )
                     }
                     disabled={selectedEloIds.length === 0}
@@ -527,19 +517,17 @@ export default function DesignSessionScreen() {
               <Card title="Finalkan kurikulum" subtitle="Semua komponen utama sudah siap untuk disusun menjadi hasil akhir.">
                 <View className="gap-4">
                   <View className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
-                    <Text className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">Modul belajar terpilih</Text>
-                    <Text className="mt-2 text-sm leading-6 text-neutral-800">{session.selected_elos.length} modul siap difinalkan.</Text>
+                    <Text className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">ELO terpilih</Text>
+                    <Text className="mt-2 text-sm leading-6 text-neutral-800">{session.selected_elos.length} ELO siap difinalkan.</Text>
                   </View>
                   <Text className="text-neutral-600">
-                    Sistem akan menyusun kurikulum final dari tujuan, target performa, dan modul belajar yang sudah Anda tetapkan.
+                    Sistem akan menyusun kurikulum final dari TLO, PCS, dan ELO yang sudah Anda tetapkan.
                   </Text>
                   <View className="flex-row flex-wrap gap-3">
                     <Button
-                      title="Buat ulang opsi modul"
+                      title="Buat ulang opsi ELO"
                       variant="outline"
-                      onPress={() =>
-                        void runAction(() => generateEloOptions(), 'Opsi modul belajar berhasil diperbarui.')
-                      }
+                      onPress={() => void runAction(() => generateEloOptions(), 'Opsi ELO berhasil diperbarui.')}
                       isLoading={isWorking}
                     />
                     <Button
@@ -588,11 +576,16 @@ export default function DesignSessionScreen() {
             </Card>
 
             {showPerformancePreview ? (
-              <Card title="Pratinjau PCS" subtitle="Pastikan Performance, Condition, dan Standard (PCS) sudah sejalan sebelum finalisasi.">
+              <Card title="Pratinjau TLO, PCS, dan ELO" subtitle="Pastikan TLO, Performance, Condition, Standard, dan ELO tetap sejalan sebelum finalisasi.">
                 <View className="gap-3">
+                  <PreviewField label="TLO" value={session.selected_tlo?.text ?? 'Belum dipilih'} />
                   <PreviewField label="Performance (PCS)" value={session.selected_performance?.text ?? 'Belum dipilih'} />
                   <PreviewField label="Condition (PCS)" value={session.preview_condition_result ?? 'Akan muncul setelah Performance (PCS) dipilih.'} />
                   <PreviewField label="Standard (PCS)" value={session.preview_standard_result ?? 'Akan disesuaikan setelah ELO dipilih.'} />
+                  <PreviewField
+                    label="ELO"
+                    value={session.selected_elos.length ? `${session.selected_elos.length} ELO dipilih.` : 'Belum dipilih'}
+                  />
                 </View>
               </Card>
             ) : null}
