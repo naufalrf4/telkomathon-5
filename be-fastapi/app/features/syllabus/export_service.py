@@ -1,30 +1,27 @@
 import io
-import tempfile
+import logging
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
+import mammoth
 from docx import Document as WordDocument
-from docxtpl import DocxTemplate
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from docxtpl import DocxTemplate, RichText
 from sqlalchemy import select
 
-from app.exceptions import NotFoundException
+from app.exceptions import NotFoundException, ValidationException
 from app.features.syllabus.models import GeneratedSyllabus
 
 _TEMPLATES_DIR = Path(__file__).with_name("templates")
-_PDF_TEMPLATE_NAME = "syllabus_export.html"
+_DOCX_TEMPLATE_PATH = _TEMPLATES_DIR / "syllabus_template.docx"
+_PLACEHOLDER_TEXTS = ("Belum tersedia",)
+logger = logging.getLogger(__name__)
 
 
 class SyllabusExportService:
     def __init__(self, db: Any) -> None:
         self.db = db
-        self.template_env = Environment(
-            loader=FileSystemLoader(_TEMPLATES_DIR),
-            autoescape=select_autoescape(("html", "xml")),
-            trim_blocks=True,
-            lstrip_blocks=True,
-        )
 
     async def generate_docx(
         self,
@@ -33,6 +30,7 @@ class SyllabusExportService:
         owner_id: uuid.UUID | None = None,
     ) -> bytes:
         syllabus = await self._get_syllabus(syllabus_id, owner_id=owner_id)
+        self._validate_exportable_syllabus(syllabus)
         context = self._build_export_context(syllabus)
         return self._render_docx(context)
 
@@ -43,14 +41,51 @@ class SyllabusExportService:
         owner_id: uuid.UUID | None = None,
     ) -> bytes:
         syllabus = await self._get_syllabus(syllabus_id, owner_id=owner_id)
-        context = self._build_export_context(syllabus)
-        try:
-            from weasyprint import HTML
-        except OSError:
-            return self._render_basic_pdf(context)
+        self._validate_exportable_syllabus(syllabus)
+        docx_bytes = self._render_docx(self._build_export_context(syllabus))
+        return self._render_pdf_from_docx(docx_bytes)
 
-        html = self.template_env.get_template(_PDF_TEMPLATE_NAME).render(**context)
-        return cast(bytes, HTML(string=html).write_pdf())
+    def _validate_exportable_syllabus(self, syllabus: GeneratedSyllabus) -> None:
+        missing_fields = [
+            field_name
+            for field_name, value in (
+                ("tlo", syllabus.tlo),
+                ("performance_result", syllabus.performance_result),
+                ("condition_result", syllabus.condition_result),
+                ("standard_result", syllabus.standard_result),
+            )
+            if not str(value or "").strip()
+        ]
+        if missing_fields:
+            raise ValidationException(
+                "Syllabus export requires complete finalized fields: " + ", ".join(missing_fields)
+            )
+
+        journey = syllabus.journey if isinstance(syllabus.journey, dict) else {}
+        for stage_name in ("pre_learning", "classroom", "after_learning"):
+            stage = journey.get(stage_name)
+            if not isinstance(stage, dict):
+                raise ValidationException(
+                    f"Syllabus export requires a complete journey stage: {stage_name}"
+                )
+            if not str(stage.get("duration", "")).strip():
+                raise ValidationException(
+                    f"Syllabus export requires a journey duration for {stage_name}"
+                )
+            if not str(stage.get("description", "")).strip():
+                raise ValidationException(
+                    f"Syllabus export requires a journey description for {stage_name}"
+                )
+            method = stage.get("method")
+            content = stage.get("content")
+            if not isinstance(method, list) or not [item for item in method if str(item).strip()]:
+                raise ValidationException(
+                    f"Syllabus export requires journey delivery methods for {stage_name}"
+                )
+            if not isinstance(content, list) or not [item for item in content if str(item).strip()]:
+                raise ValidationException(
+                    f"Syllabus export requires journey content for {stage_name}"
+                )
 
     async def _get_syllabus(
         self,
@@ -69,29 +104,68 @@ class SyllabusExportService:
 
     def _build_export_context(self, syllabus: GeneratedSyllabus) -> dict[str, object]:
         journey = syllabus.journey if isinstance(syllabus.journey, dict) else {}
+        pre_learning = self._build_stage_context("Pra-pembelajaran", journey.get("pre_learning"))
+        classroom = self._build_stage_context("Di kelas", journey.get("classroom"))
+        after_learning = self._build_stage_context(
+            "Pasca-pembelajaran", journey.get("after_learning")
+        )
+        elo_items = [item for item in syllabus.elos if isinstance(item, dict)]
         revision_history = (
             [entry for entry in syllabus.revision_history if isinstance(entry, dict)][-3:]
             if syllabus.revision_history
             else []
         )
+        course_name = syllabus.course_title or syllabus.topic
+        company_profile_summary = syllabus.company_profile_summary or ""
+        commercial_overview = syllabus.commercial_overview or ""
+        performance_result = syllabus.performance_result or ""
+        condition_result = syllabus.condition_result or ""
+        standard_result = syllabus.standard_result or ""
         return {
-            "course_title": syllabus.course_title or syllabus.topic,
+            "date_stamp": self._format_date(syllabus.updated_at or syllabus.created_at),
+            "course_title": course_name,
+            "course_name": course_name,
             "topic": syllabus.topic,
             "target_level": syllabus.target_level,
             "course_category": syllabus.course_category or "",
             "client_company_name": syllabus.client_company_name or "",
-            "company_profile_summary": syllabus.company_profile_summary or "",
-            "commercial_overview": syllabus.commercial_overview or "",
             "tlo": syllabus.tlo,
-            "performance_result": syllabus.performance_result or "Belum tersedia",
-            "condition_result": syllabus.condition_result or "Belum tersedia",
-            "standard_result": syllabus.standard_result or "Belum tersedia",
-            "elos": [item for item in syllabus.elos if isinstance(item, dict)],
-            "journey_stages": [
-                self._build_stage_context("Pra-pembelajaran", journey.get("pre_learning")),
-                self._build_stage_context("Di kelas", journey.get("classroom")),
-                self._build_stage_context("Pasca-pembelajaran", journey.get("after_learning")),
-            ],
+            "elos": elo_items,
+            "journey_stages": [pre_learning, classroom, after_learning],
+            "elo_results": self._rich_text(self._join_elo_items(elo_items)),
+            "learning_journey_category": self._rich_text(
+                syllabus.course_category or "Formal learning"
+            ),
+            "pre_learning_duration": self._rich_text(cast(str, pre_learning["duration"])),
+            "pre_learning_method": self._rich_text(
+                self._join_lines(cast(list[str], pre_learning["method"]))
+            ),
+            "pre_learning_content_list": self._rich_text(
+                self._join_lines(cast(list[str], pre_learning["content"]))
+            ),
+            "pre_learning_evaluation": self._rich_text(cast(str, pre_learning["description"])),
+            "classroom_duration": self._rich_text(cast(str, classroom["duration"])),
+            "classroom_method": self._rich_text(
+                self._join_lines(cast(list[str], classroom["method"]))
+            ),
+            "classroom_content_list": self._rich_text(
+                self._join_lines(cast(list[str], classroom["content"]))
+            ),
+            "classroom_evaluation": self._rich_text(cast(str, classroom["description"])),
+            "after_learning_duration": self._rich_text(cast(str, after_learning["duration"])),
+            "after_learning_method": self._rich_text(
+                self._join_lines(cast(list[str], after_learning["method"]))
+            ),
+            "after_learning_content_list": self._rich_text(
+                self._join_lines(cast(list[str], after_learning["content"]))
+            ),
+            "after_learning_evaluation": self._rich_text(cast(str, after_learning["description"])),
+            "tlo_result": self._rich_text(syllabus.tlo),
+            "performance_result": self._rich_text(performance_result),
+            "condition_result": self._rich_text(condition_result),
+            "standard_result": self._rich_text(standard_result),
+            "company_profile_summary": self._rich_text(company_profile_summary),
+            "commercial_overview": self._rich_text(commercial_overview),
             "revision_history": [
                 {
                     "summary": str(entry.get("summary", "")).strip() or "Perubahan tanpa ringkasan",
@@ -133,68 +207,61 @@ class SyllabusExportService:
         }
 
     def _render_docx(self, context: dict[str, object]) -> bytes:
-        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as template_file:
-            template_path = template_file.name
+        if not _DOCX_TEMPLATE_PATH.exists():
+            raise FileNotFoundError(f"Syllabus DOCX template not found: {_DOCX_TEMPLATE_PATH}")
+        return self._render_docx_from_template(_DOCX_TEMPLATE_PATH, context)
+
+    def _render_docx_from_template(self, template_path: Path, context: dict[str, object]) -> bytes:
+        document = DocxTemplate(str(template_path))
+        document.render(context)
+        buffer = io.BytesIO()
+        document.save(buffer)
+        return self._strip_placeholder_text(buffer.getvalue())
+
+    def _strip_placeholder_text(self, docx_bytes: bytes) -> bytes:
+        document = WordDocument(io.BytesIO(docx_bytes))
+        for paragraph in document.paragraphs:
+            self._strip_placeholder_from_paragraph(paragraph)
+        for table in document.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
+                        self._strip_placeholder_from_paragraph(paragraph)
+
+        buffer = io.BytesIO()
+        document.save(buffer)
+        return buffer.getvalue()
+
+    def _strip_placeholder_from_paragraph(self, paragraph: Any) -> None:
+        for run in paragraph.runs:
+            updated_text = run.text
+            for placeholder in _PLACEHOLDER_TEXTS:
+                updated_text = updated_text.replace(placeholder, "")
+            if updated_text != run.text:
+                run.text = updated_text
+
+    def _render_pdf_from_docx(self, docx_bytes: bytes) -> bytes:
+        html_body = self._render_docx_html(docx_bytes)
         try:
-            self._build_docx_template(template_path)
-            document = DocxTemplate(template_path)
-            document.render(context)
-            buffer = io.BytesIO()
-            document.save(buffer)
-            return buffer.getvalue()
-        finally:
-            Path(template_path).unlink(missing_ok=True)
+            from weasyprint import HTML
+        except OSError:
+            return self._render_basic_pdf_from_docx(docx_bytes)
 
-    def _build_docx_template(self, path: str) -> None:
-        document = WordDocument()
-        document.add_heading("{{ course_title }}", level=0)
-        document.add_paragraph("Topik: {{ topic }}")
-        document.add_paragraph("Level target: {{ target_level }}")
-        document.add_paragraph("Kategori: {{ course_category }}")
-        document.add_paragraph("Klien: {{ client_company_name }}")
-        document.add_paragraph("Ringkasan perusahaan: {{ company_profile_summary }}")
-        document.add_paragraph("Kebutuhan bisnis: {{ commercial_overview }}")
+        try:
+            return cast(bytes, HTML(string=self._wrap_export_html(html_body)).write_pdf())
+        except Exception:
+            logger.warning(
+                "Falling back to basic PDF export because DOCX-to-PDF rendering failed",
+                exc_info=True,
+            )
+            return self._render_basic_pdf_from_docx(docx_bytes)
 
-        for heading, field_name in (
-            ("Tujuan akhir pembelajaran", "tlo"),
-            ("Target performa", "performance_result"),
-            ("Kondisi belajar", "condition_result"),
-            ("Standar hasil", "standard_result"),
-        ):
-            document.add_heading(heading, level=1)
-            document.add_paragraph(f"{{{{ {field_name} }}}}")
+    def _render_docx_html(self, docx_bytes: bytes) -> str:
+        result = mammoth.convert_to_html(io.BytesIO(docx_bytes))
+        return str(result.value)
 
-        document.add_heading("Modul belajar", level=1)
-        document.add_paragraph("{% for elo in elos %}")
-        document.add_paragraph("{{ loop.index }}. {{ elo.elo }}")
-        document.add_paragraph("{% endfor %}")
-
-        document.add_heading("Alur belajar", level=1)
-        document.add_paragraph("{% for stage in journey_stages %}")
-        document.add_heading("{{ stage.label }}", level=2)
-        document.add_paragraph("Durasi: {{ stage.duration }}")
-        document.add_paragraph("{{ stage.description }}")
-        document.add_paragraph("Metode:")
-        document.add_paragraph("{% for method_item in stage.method %}")
-        document.add_paragraph("{{ method_item }}", style="List Bullet")
-        document.add_paragraph("{% endfor %}")
-        document.add_paragraph("Materi:")
-        document.add_paragraph("{% for content_item in stage.content %}")
-        document.add_paragraph("{{ content_item }}", style="List Bullet")
-        document.add_paragraph("{% endfor %}")
-        document.add_paragraph("{% endfor %}")
-
-        document.add_heading("Riwayat revisi", level=1)
-        document.add_paragraph("{% for revision in revision_history %}")
-        document.add_paragraph(
-            "{{ revision.summary }}{% if revision.reason %} — {{ revision.reason }}{% endif %}",
-            style="List Bullet",
-        )
-        document.add_paragraph("{% endfor %}")
-        document.save(path)
-
-    def _render_basic_pdf(self, context: dict[str, object]) -> bytes:
-        lines = self._pdf_lines(context)
+    def _render_basic_pdf_from_docx(self, docx_bytes: bytes) -> bytes:
+        lines = self._docx_lines(docx_bytes)
         content_commands = ["BT", "/F1 11 Tf", "50 790 Td"]
         for line in lines:
             content_commands.append(f"({self._escape_pdf_text(line)}) Tj")
@@ -230,31 +297,61 @@ class SyllabusExportService:
         )
         return bytes(pdf)
 
-    def _pdf_lines(self, context: dict[str, object]) -> list[str]:
+    def _docx_lines(self, docx_bytes: bytes) -> list[str]:
+        document = WordDocument(io.BytesIO(docx_bytes))
         lines = [
-            str(context.get("course_title", "")),
-            f"Topik: {context.get('topic', '')}",
-            f"Level target: {context.get('target_level', '')}",
-            f"Kategori: {context.get('course_category', '')}",
-            f"Klien: {context.get('client_company_name', '')}",
-            "",
-            f"Ringkasan perusahaan: {context.get('company_profile_summary', '')}",
-            f"Kebutuhan bisnis: {context.get('commercial_overview', '')}",
-            "",
-            f"Tujuan akhir pembelajaran: {context.get('tlo', '')}",
-            f"Target performa: {context.get('performance_result', '')}",
-            f"Kondisi belajar: {context.get('condition_result', '')}",
-            f"Standar hasil: {context.get('standard_result', '')}",
-            "",
-            "Modul belajar:",
+            paragraph.text.strip() for paragraph in document.paragraphs if paragraph.text.strip()
         ]
-        for elo in cast(list[dict[str, object]], context.get("elos", [])):
-            lines.append(f"- {elo.get('elo', '')}")
-        lines.append("")
-        lines.append("Alur belajar:")
-        for stage in cast(list[dict[str, object]], context.get("journey_stages", [])):
-            lines.append(f"{stage.get('label', '')}: {stage.get('description', '')}")
-        return lines[:34]
+        return lines[:40]
+
+    def _join_lines(self, items: list[str]) -> str:
+        return "\n".join(item for item in items if item.strip()) or "Belum tersedia"
+
+    def _join_elo_items(self, items: list[dict[str, object]]) -> str:
+        values = [
+            str(item.get("elo", "")).strip() for item in items if str(item.get("elo", "")).strip()
+        ]
+        return "\n".join(f"• {value}" for value in values) or "Belum tersedia"
+
+    def _rich_text(self, value: str) -> RichText:
+        rich = RichText()
+        lines = [line.strip() for line in value.splitlines()] or [value]
+        wrote_any = False
+        for line in lines:
+            if not line:
+                continue
+            if wrote_any:
+                rich.add("\n")
+            rich.add(line)
+            wrote_any = True
+        if not wrote_any:
+            rich.add("Belum tersedia")
+        return rich
+
+    def _wrap_export_html(self, body: str) -> str:
+        return f"""
+<!DOCTYPE html>
+<html lang=\"id\">
+  <head>
+    <meta charset=\"UTF-8\" />
+    <style>
+      @page {{ size: A4; margin: 24mm 18mm; }}
+      body {{ font-family: sans-serif; color: #172033; font-size: 11pt; line-height: 1.55; }}
+      h1, h2, h3, h4 {{ color: #172033; margin: 0 0 10px; }}
+      p {{ margin: 0 0 10px; }}
+      ul, ol {{ margin: 0 0 10px 20px; }}
+      table {{ width: 100%; border-collapse: collapse; margin: 0 0 12px; }}
+      td, th {{ border: 1px solid #e2e8f0; padding: 8px; vertical-align: top; }}
+    </style>
+  </head>
+  <body>{body}</body>
+</html>
+"""
 
     def _escape_pdf_text(self, value: str) -> str:
         return value.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+    def _format_date(self, value: object) -> str:
+        if isinstance(value, datetime):
+            return value.strftime("%d %B %Y")
+        return ""

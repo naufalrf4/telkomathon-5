@@ -80,6 +80,7 @@ class SyllabusResponse(BaseModel):
     elos: list[ELO]
     journey: LearningJourney
     revision_history: list[RevisionHistoryEntry]
+    generation_meta: dict[str, Any] | None = None
     status: str
     created_at: datetime
     updated_at: datetime
@@ -128,6 +129,9 @@ class SyllabusResponse(BaseModel):
                 for entry in model.revision_history
                 if isinstance(entry, dict) and entry.get("revised_at")
             ],
+            "generation_meta": model.generation_meta
+            if isinstance(model.generation_meta, dict)
+            else None,
             "status": model.status,
             "created_at": model.created_at,
             "updated_at": model.updated_at,
@@ -184,3 +188,33 @@ def _course_expertise_level(target_level: int) -> str:
         5: "Expert",
     }
     return mapping.get(target_level, f"Level {target_level}")
+
+
+# ---------- Chat-based revision schemas ----------
+
+
+class ChatMessageRequest(BaseModel):
+    content: str = Field(..., min_length=1, max_length=2000)
+
+
+class ChatMessageResponse(BaseModel):
+    model_config: ClassVar[ConfigDict] = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    syllabus_id: uuid.UUID
+    role: str
+    content: str
+    target_sections: list[str] | None = None
+    proposed_changes: dict[str, object] | None = None
+    section_statuses: dict[str, str] | None = None
+    status: str
+    created_at: datetime
+
+
+class ChatHistoryResponse(BaseModel):
+    messages: list[ChatMessageResponse]
+    syllabus_id: uuid.UUID
+
+
+class SectionDecisionRequest(BaseModel):
+    section_key: str = Field(..., min_length=1)

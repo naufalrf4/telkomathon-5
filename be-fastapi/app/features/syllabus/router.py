@@ -5,9 +5,14 @@ from fastapi.responses import Response
 
 from app.features.auth.dependencies import get_current_user
 from app.features.auth.models import User
+from app.features.syllabus.dependencies import get_revision_chat_service, get_syllabus_service
 from app.features.syllabus.export_service import SyllabusExportService
-from app.features.syllabus.dependencies import get_syllabus_service
+from app.features.syllabus.revision_service import RevisionChatService
 from app.features.syllabus.schemas import (
+    ChatHistoryResponse,
+    ChatMessageRequest,
+    ChatMessageResponse,
+    SectionDecisionRequest,
     SyllabusResponse,
     SyllabusRevisionApplyRequest,
 )
@@ -86,4 +91,74 @@ async def download_syllabus_pdf(
         headers={
             "Content-Disposition": f'attachment; filename="syllabus-{syllabus_id}.pdf"',
         },
+    )
+
+
+# ---------- Chat-based revision endpoints ----------
+
+
+@router.post("/{syllabus_id}/chat")
+async def send_chat_message(
+    syllabus_id: uuid.UUID,
+    request: ChatMessageRequest,
+    current_user: User = Depends(get_current_user),
+    revision_service: RevisionChatService = Depends(get_revision_chat_service),
+) -> dict[str, object]:
+    message = await revision_service.send_message(
+        syllabus_id, request.content, owner_id=current_user.id
+    )
+    return success_response(ChatMessageResponse.model_validate(message).model_dump(mode="json"))
+
+
+@router.get("/{syllabus_id}/chat")
+async def get_chat_history(
+    syllabus_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    revision_service: RevisionChatService = Depends(get_revision_chat_service),
+) -> dict[str, object]:
+    messages = await revision_service.get_history(syllabus_id, owner_id=current_user.id)
+    response = ChatHistoryResponse(
+        messages=[ChatMessageResponse.model_validate(m) for m in messages],
+        syllabus_id=syllabus_id,
+    )
+    return success_response(response.model_dump(mode="json"))
+
+
+@router.post("/{syllabus_id}/chat/{message_id}/accept")
+async def accept_chat_revision(
+    syllabus_id: uuid.UUID,
+    message_id: uuid.UUID,
+    request: SectionDecisionRequest,
+    current_user: User = Depends(get_current_user),
+    revision_service: RevisionChatService = Depends(get_revision_chat_service),
+) -> dict[str, object]:
+    syllabus = await revision_service.accept_revision(
+        syllabus_id,
+        message_id,
+        request.section_key,
+        owner_id=current_user.id,
+    )
+    return success_response(
+        SyllabusResponse.from_orm_with_coerce(syllabus).model_dump(mode="json"),
+        message="Revision accepted",
+    )
+
+
+@router.post("/{syllabus_id}/chat/{message_id}/reject")
+async def reject_chat_revision(
+    syllabus_id: uuid.UUID,
+    message_id: uuid.UUID,
+    request: SectionDecisionRequest,
+    current_user: User = Depends(get_current_user),
+    revision_service: RevisionChatService = Depends(get_revision_chat_service),
+) -> dict[str, object]:
+    message = await revision_service.reject_revision(
+        syllabus_id,
+        message_id,
+        request.section_key,
+        owner_id=current_user.id,
+    )
+    return success_response(
+        ChatMessageResponse.model_validate(message).model_dump(mode="json"),
+        message="Revision rejected",
     )

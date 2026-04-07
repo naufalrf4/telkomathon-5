@@ -26,6 +26,7 @@ dependencies = [
     "tiktoken==0.8.*",
     "uvicorn[standard]==0.34.*",
     "weasyprint==63.*",
+    "mammoth==1.8.*",
 ]
 
 [dependency-groups]
