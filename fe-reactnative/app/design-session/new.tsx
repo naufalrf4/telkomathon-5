@@ -8,6 +8,7 @@ import { Button } from '../../src/components/ui/Button';
 import { Card } from '../../src/components/ui/Card';
 import { LoadingSpinner } from '../../src/components/ui/LoadingSpinner';
 import { PageHeader } from '../../src/components/ui/PageHeader';
+import { SectionTabs } from '../../src/components/ui/SectionTabs';
 import { useDesignSession } from '../../src/hooks/useDesignSession';
 import { useDocuments } from '../../src/hooks/useDocuments';
 import { getErrorMessage } from '../../src/services/api';
@@ -19,6 +20,7 @@ const ACCEPTED_FILE_TYPES =
 const MAX_UPLOAD_MB = Number(process.env.EXPO_PUBLIC_MAX_UPLOAD_MB ?? '100');
 const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
 const NON_TERMINAL_STATUSES = new Set(['uploaded', 'queued', 'processing', 'extracting']);
+type UploadMode = 'upload' | 'library';
 
 function docTypeFromFilename(filename: string): string {
   const extension = filename.split('.').pop()?.toLowerCase() ?? '';
@@ -40,6 +42,24 @@ function statusLabel(status: string) {
     failed: 'Gagal diproses',
   };
   return labels[status] ?? status;
+}
+
+function progressValue(status: string) {
+  const values: Record<string, number> = {
+    uploaded: 20,
+    queued: 35,
+    processing: 68,
+    extracting: 88,
+    ready: 100,
+    failed: 100,
+  };
+  return values[status] ?? 0;
+}
+
+function progressBarClass(status: string) {
+  if (status === 'failed') return 'bg-red-500';
+  if (status === 'ready') return 'bg-emerald-500';
+  return 'bg-primary-600';
 }
 
 function statusChipClass(status: string) {
@@ -64,12 +84,16 @@ export default function NewDesignSessionScreen() {
     isUploading,
     retryDocumentAsync,
     isRetryingDocument,
+    deleteDocumentAsync,
+    isDeleting,
   } = useDocuments();
   const { createSession, isCreatingSession } = useDesignSession();
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [uploadMode, setUploadMode] = useState<UploadMode>('upload');
+  const [uploadedDocIds, setUploadedDocIds] = useState<string[]>([]);
 
   const availableDocuments = useMemo(() => documents ?? [], [documents]);
   const readyDocuments = availableDocuments.filter((document) => document.status === 'ready');
@@ -89,7 +113,28 @@ export default function NewDesignSessionScreen() {
     return () => clearInterval(interval);
   }, [processingDocuments.length, refetch]);
 
+  useEffect(() => {
+    if (uploadedDocIds.length === 0) {
+      return;
+    }
+
+    const readyUploadedIds = readyDocuments
+      .filter((document) => uploadedDocIds.includes(document.id))
+      .map((document) => document.id);
+
+    if (readyUploadedIds.length === 0) {
+      return;
+    }
+
+    setSelectedDocIds((current) => {
+      const next = new Set(current);
+      readyUploadedIds.forEach((id) => next.add(id));
+      return Array.from(next);
+    });
+  }, [readyDocuments, uploadedDocIds]);
+
   const markUploadedDocument = (document: SourceDocument) => {
+    setUploadedDocIds((current) => (current.includes(document.id) ? current : [...current, document.id]));
     if (document.status === 'ready') {
       setSelectedDocIds((current) => (current.includes(document.id) ? current : [...current, document.id]));
     }
@@ -130,6 +175,7 @@ export default function NewDesignSessionScreen() {
 
       const uploaded = await uploadDocumentAsync(formData);
       markUploadedDocument(uploaded);
+      setUploadMode('upload');
       await refetch();
     } catch (uploadErr) {
       setUploadError(getErrorMessage(uploadErr, 'Gagal mengunggah dokumen ke create flow.'));
@@ -157,6 +203,7 @@ export default function NewDesignSessionScreen() {
         const uploaded = await uploadDocumentAsync(formData);
         markUploadedDocument(uploaded);
       }
+      setUploadMode('upload');
       await refetch();
     } catch (uploadErr) {
       setUploadError(getErrorMessage(uploadErr, 'Gagal mengunggah dokumen ke create flow.'));
@@ -216,122 +263,332 @@ export default function NewDesignSessionScreen() {
     }
   };
 
+  const handleDelete = async (documentId: string) => {
+    setErrorMessage(null);
+    try {
+      await deleteDocumentAsync(documentId);
+      setSelectedDocIds((current) => current.filter((id) => id !== documentId));
+      setUploadedDocIds((current) => current.filter((id) => id !== documentId));
+      await refetch();
+    } catch (deleteError) {
+      setErrorMessage(getErrorMessage(deleteError, 'Dokumen belum bisa dihapus.'));
+    }
+  };
+
   return (
     <ScrollView className="flex-1 bg-background" showsVerticalScrollIndicator={false}>
-      <View className="mx-auto w-full max-w-6xl gap-6 p-4 lg:p-8">
+      <View className="mx-auto w-full max-w-6xl gap-4 p-4 lg:p-8">
         <PageHeader
           eyebrow="Langkah 1"
-          title="Unggah materi dan lanjutkan saat dokumen sudah siap"
-          description="Upload sekarang, tinggalkan halaman bila perlu, lalu kembali saat status dokumen berubah menjadi siap. Sistem akan menyelesaikan parsing, OCR, dan ringkasan perusahaan di background."
-          actions={<Button title="Lihat kurikulum" variant="outline" onPress={() => router.push('/syllabus/generated')} />}
+          title="Unggah dokumen sumber"
         />
 
-        {Platform.OS === 'web' ? (
-          <>
-            <input
-              ref={webInputRef}
-              type="file"
-              accept={ACCEPTED_FILE_TYPES}
-              multiple
-              style={{ display: 'none' }}
-              onChange={(event) => {
-                void handleWebInputChange(event);
-              }}
+        <Card className="overflow-hidden border-neutral-300 bg-surface p-0 shadow-sm">
+          <View className="border-b border-neutral-200 px-4 py-4 lg:px-6">
+            <SectionTabs
+              value={uploadMode}
+              onChange={setUploadMode}
+              items={[
+                { value: 'upload', label: 'Upload baru' },
+                { value: 'library', label: 'Dokumen sebelumnya' },
+              ]}
             />
-            <div
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={(event) => {
-                void handleDrop(event);
-              }}
-              onClick={() => webInputRef.current?.click()}
-              style={{
-                borderWidth: 2,
-                borderStyle: 'dashed',
-                borderColor: isDragging ? '#F47B81' : '#CBD5E1',
-                backgroundColor: isDragging ? '#FFF1F3' : '#F8FAFC',
-                borderRadius: 20,
-                padding: 28,
-                cursor: 'pointer',
-                transition: 'all 150ms ease',
-              }}
-            >
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                <div
-                  style={{
-                    width: 72,
-                    height: 72,
-                    borderRadius: 999,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: '#FDE8E9',
-                  }}
-                >
-                  <Ionicons name="cloud-upload-outline" size={34} color={colors.primary} />
-                </div>
-                <Text className="text-xl font-semibold text-neutral-900">Tarik file ke sini</Text>
-                <Text className="text-center text-neutral-500">
-                  Gunakan PDF, DOCX, atau PPTX hingga {MAX_UPLOAD_MB}MB per file.
-                </Text>
-                <View className="mt-2 flex-row flex-wrap gap-2">
-                  {['PDF', 'DOCX', 'PPTX'].map((label) => (
-                    <View key={label} className="rounded-full bg-neutral-100 px-3 py-1">
-                      <Text className="text-xs font-semibold text-neutral-600">{label}</Text>
+          </View>
+
+          <View className="gap-5 p-4 lg:p-6">
+            {uploadMode === 'upload' ? (
+              <>
+                {Platform.OS === 'web' ? (
+                  <>
+                    <input
+                      ref={webInputRef}
+                      type="file"
+                      accept={ACCEPTED_FILE_TYPES}
+                      multiple
+                      style={{ display: 'none' }}
+                      onChange={(event) => {
+                        void handleWebInputChange(event);
+                      }}
+                    />
+                    <div
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={(event) => {
+                        void handleDrop(event);
+                      }}
+                      onClick={() => webInputRef.current?.click()}
+                      style={{
+                        borderWidth: 2,
+                        borderStyle: 'dashed',
+                        borderColor: isDragging ? '#F47B81' : '#CBD5E1',
+                        backgroundColor: isDragging ? '#FFF1F3' : '#FFFFFF',
+                        borderRadius: 20,
+                        padding: 32,
+                        cursor: 'pointer',
+                        transition: 'all 150ms ease',
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                        <div
+                          style={{
+                            width: 72,
+                            height: 72,
+                            borderRadius: 999,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: '#FDE8E9',
+                          }}
+                        >
+                          <Ionicons name="cloud-upload-outline" size={34} color={colors.primary} />
+                        </div>
+                        <Text className="text-xl font-semibold text-neutral-900">Upload dokumen</Text>
+                        <View className="flex-row flex-wrap justify-center gap-2">
+                          {['PDF', 'DOCX', 'PPTX'].map((label) => (
+                            <View key={label} className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1">
+                              <Text className="text-xs font-semibold text-neutral-600">{label}</Text>
+                            </View>
+                          ))}
+                          <View className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1">
+                            <Text className="text-xs font-semibold text-neutral-600">Max {MAX_UPLOAD_MB}MB</Text>
+                          </View>
+                        </View>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <Card className="border border-dashed border-neutral-300 bg-surface shadow-none">
+                    <View className="items-center gap-3 py-6">
+                      <View className="h-16 w-16 items-center justify-center rounded-full bg-primary-50">
+                        <Ionicons name="cloud-upload-outline" size={32} color={colors.primary} />
+                      </View>
+                      <Text className="text-xl font-semibold text-neutral-900">Upload dokumen</Text>
+                      <View className="flex-row flex-wrap justify-center gap-2">
+                        {['PDF', 'DOCX', 'PPTX'].map((label) => (
+                          <View key={label} className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1">
+                            <Text className="text-xs font-semibold text-neutral-600">{label}</Text>
+                          </View>
+                        ))}
+                      </View>
+                      <Button title="Pilih dokumen" onPress={() => void uploadNativeDocument()} isLoading={isUploading} />
                     </View>
-                  ))}
-                </View>
-              </div>
-            </div>
-          </>
-        ) : (
-          <Card className="border border-dashed border-neutral-300 bg-surface">
-            <View className="items-center gap-3 py-6">
-              <View className="h-16 w-16 items-center justify-center rounded-full bg-primary-50">
-                <Ionicons name="cloud-upload-outline" size={32} color={colors.primary} />
-              </View>
-              <Text className="text-xl font-semibold text-neutral-900">Unggah file</Text>
-              <Text className="text-center text-neutral-500">
-                Gunakan PDF, DOCX, atau PPTX hingga {MAX_UPLOAD_MB}MB per file.
-              </Text>
-              <Button title="Pilih Dokumen" onPress={() => void uploadNativeDocument()} isLoading={isUploading} />
-            </View>
-          </Card>
-        )}
+                  </Card>
+                )}
 
-        <View className="grid gap-4 lg:grid-cols-3">
-          <Card>
-            <Text className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">Dokumen</Text>
-            <Text className="mt-2 text-2xl font-semibold text-neutral-950">{availableDocuments.length}</Text>
-            <Text className="mt-1 text-sm text-neutral-600">Semua dokumen yang tersimpan di flow ini siap dipilih ulang kapan saja.</Text>
-          </Card>
-          <Card>
-            <Text className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">Sedang diproses</Text>
-            <Text className="mt-2 text-2xl font-semibold text-neutral-950">{processingDocuments.length}</Text>
-            <Text className="mt-1 text-sm text-neutral-600">Status akan diperbarui otomatis selama Anda tetap di halaman.</Text>
-          </Card>
-          <Card>
-            <Text className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">Siap disusun</Text>
-            <Text className="mt-2 text-2xl font-semibold text-neutral-950">{readyDocuments.length}</Text>
-            <Text className="mt-1 text-sm text-neutral-600">Pilih minimal satu dokumen siap lalu lanjutkan ke wizard.</Text>
-          </Card>
-        </View>
+                {processingDocuments.length > 0 ? (
+                  <Card className="border-neutral-300 bg-surface shadow-sm">
+                    <View className="flex-row items-center justify-between gap-3">
+                      <View className="flex-row items-center gap-2">
+                        <Ionicons name="sync-outline" size={18} color={colors.primary} />
+                        <Text className="text-sm font-semibold text-neutral-900">Progress dokumen</Text>
+                      </View>
+                      <Text className="text-xs font-medium text-neutral-500">Bisa ditinggal dulu</Text>
+                    </View>
 
-        {processingDocuments.length > 0 ? (
-          <AlertBanner
-            variant="info"
-            title="Upload sudah aman ditinggalkan"
-            description="Anda bisa menutup halaman sekarang. Saat kembali, daftar dokumen akan menampilkan status terbaru dan dokumen siap bisa langsung dipilih."
-          />
-        ) : null}
+                    <View className="mt-4 gap-3">
+                      {processingDocuments.map((document) => {
+                        const progress = progressValue(document.status);
+                        return (
+                          <View key={document.id} className="rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3">
+                            <View className="flex-row items-start justify-between gap-3">
+                              <View className="flex-1">
+                                <Text className="text-sm font-semibold text-neutral-900">{document.filename}</Text>
+                                <Text className="mt-1 text-xs text-neutral-500">{statusLabel(document.status)}</Text>
+                              </View>
+                              <Text className="text-sm font-semibold text-neutral-700">{progress}%</Text>
+                            </View>
+                            <View className="mt-3 h-2 overflow-hidden rounded-full bg-neutral-200">
+                              <View className={`h-full rounded-full ${progressBarClass(document.status)}`} style={{ width: `${progress}%` }} />
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </Card>
+                ) : null}
 
-        {failedDocuments.length > 0 ? (
-          <AlertBanner
-            variant="warning"
-            title="Sebagian dokumen perlu diproses ulang"
-            description="Gunakan tombol coba lagi pada dokumen yang gagal untuk menjalankan parsing dan ekstraksi ulang."
-          />
-        ) : null}
+                {uploadedDocIds.length > 0 ? (
+                  <Card className="border-neutral-300 bg-surface shadow-sm">
+                    <View className="gap-3">
+                      {availableDocuments
+                        .filter((document) => uploadedDocIds.includes(document.id))
+                        .map((document) => {
+                          const isSelected = selectedDocIds.includes(document.id);
+                          return (
+                            <View key={document.id} className="flex-row items-center justify-between gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3">
+                              <View className="flex-1">
+                                <Text className="text-sm font-semibold text-neutral-900">{document.filename}</Text>
+                                <Text className="mt-1 text-xs text-neutral-500">{statusLabel(document.status)}</Text>
+                              </View>
+                              {isSelected ? (
+                                <View className="rounded-full bg-emerald-50 px-3 py-1">
+                                  <Text className="text-xs font-semibold text-emerald-700">Terpilih</Text>
+                                </View>
+                              ) : null}
+                            </View>
+                          );
+                        })}
+                    </View>
+                  </Card>
+                ) : null}
+              </>
+            ) : (
+              <>
+                {readyDocuments.length === 0 ? (
+                  <Card className="border border-neutral-200 bg-surface shadow-none">
+                    <View className="items-center gap-3 py-8">
+                      <Ionicons name="document-text-outline" size={30} color={colors.textSecondary} />
+                      <Text className="text-base font-semibold text-neutral-900">Belum ada dokumen siap</Text>
+                    </View>
+                  </Card>
+                ) : (
+                  <Card className="overflow-hidden border-neutral-300 bg-surface p-0 shadow-sm">
+                    <View className="hidden lg:flex flex-row border-b border-neutral-200 bg-neutral-50 px-4 py-3">
+                      <Text className="flex-[1.4] text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">Dokumen</Text>
+                      <Text className="flex-1 text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">Perusahaan</Text>
+                      <Text className="w-28 text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">Tanggal</Text>
+                      <Text className="w-32 text-right text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">Aksi</Text>
+                    </View>
+
+                    <View>
+                      {readyDocuments.map((document, index) => {
+                        const isSelected = selectedDocIds.includes(document.id);
+                        return (
+                          <View
+                            key={document.id}
+                            className={`border-b border-neutral-200 px-4 py-4 last:border-b-0 ${isSelected ? 'bg-primary-50' : 'bg-surface'}`}
+                          >
+                            <View className="hidden lg:flex flex-row items-center gap-4">
+                              <View className="flex-[1.4]">
+                                <View className="flex-row flex-wrap items-center gap-2">
+                                  <Text className="text-sm font-semibold text-neutral-900">{document.filename}</Text>
+                                  <View className={`rounded-full px-2.5 py-1 ${statusChipClass(document.status)}`}>
+                                    <Text className="text-[11px] font-semibold">{statusLabel(document.status)}</Text>
+                                  </View>
+                                </View>
+                                <Text className="mt-1 text-sm text-neutral-500">
+                                  {(document.doc_type ?? document.file_type).toUpperCase()}
+                                </Text>
+                              </View>
+
+                              <View className="flex-1">
+                                <Text className="text-sm font-medium text-neutral-900">
+                                  {document.extracted_company_name ?? '—'}
+                                </Text>
+                                {document.extracted_company_summary ? (
+                                  <Text className="mt-1 line-clamp-2 text-sm leading-6 text-neutral-500">
+                                    {document.extracted_company_summary}
+                                  </Text>
+                                ) : null}
+                              </View>
+
+                              <Text className="w-28 text-sm text-neutral-500">
+                                {new Date(document.created_at).toLocaleDateString('id-ID')}
+                              </Text>
+
+                              <View className="w-32 items-end gap-2">
+                                <Button
+                                  title={isSelected ? 'Batal pilih' : 'Pilih'}
+                                  variant={isSelected ? 'ghost' : 'primary'}
+                                  size="sm"
+                                  onPress={() => toggleDocument(document.id)}
+                                  icon={
+                                    <Ionicons
+                                      name={isSelected ? 'checkmark-circle-outline' : 'add-circle-outline'}
+                                      size={16}
+                                      color={isSelected ? colors.textSecondary : 'white'}
+                                    />
+                                  }
+                                />
+                                <Button
+                                  title="Hapus"
+                                  variant="outline"
+                                  size="sm"
+                                  onPress={() => void handleDelete(document.id)}
+                                  isLoading={isDeleting}
+                                  icon={<Ionicons name="trash-outline" size={16} color={colors.textSecondary} />}
+                                />
+                              </View>
+                            </View>
+
+                            <View className="gap-4 lg:hidden">
+                              <View className="flex-row items-start justify-between gap-3">
+                                <View className="flex-1">
+                                  <Text className="text-base font-semibold text-neutral-900">{document.filename}</Text>
+                                  <Text className="mt-1 text-sm text-neutral-500">
+                                    {(document.doc_type ?? document.file_type).toUpperCase()} • {new Date(document.created_at).toLocaleDateString('id-ID')}
+                                  </Text>
+                                </View>
+                                <View className={`rounded-full px-3 py-1 ${statusChipClass(document.status)}`}>
+                                  <Text className="text-xs font-semibold">{statusLabel(document.status)}</Text>
+                                </View>
+                              </View>
+
+                              {document.extracted_company_name ? (
+                                <View className="rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3">
+                                  <Text className="text-sm font-semibold text-neutral-900">{document.extracted_company_name}</Text>
+                                  {document.extracted_company_summary ? (
+                                    <Text className="mt-1 text-sm leading-6 text-neutral-600">{document.extracted_company_summary}</Text>
+                                  ) : null}
+                                </View>
+                              ) : null}
+
+                              <View className="flex-col gap-2 sm:flex-row">
+                                <Button
+                                  title={isSelected ? 'Batal pilih' : 'Pilih dokumen'}
+                                  variant={isSelected ? 'ghost' : 'primary'}
+                                  onPress={() => toggleDocument(document.id)}
+                                  icon={
+                                    <Ionicons
+                                      name={isSelected ? 'checkmark-circle-outline' : 'add-circle-outline'}
+                                      size={18}
+                                      color={isSelected ? colors.textSecondary : 'white'}
+                                    />
+                                  }
+                                />
+                                <Button
+                                  title="Hapus"
+                                  variant="outline"
+                                  onPress={() => void handleDelete(document.id)}
+                                  isLoading={isDeleting}
+                                  icon={<Ionicons name="trash-outline" size={18} color={colors.textSecondary} />}
+                                />
+                              </View>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </Card>
+                )}
+
+                {failedDocuments.length > 0 ? (
+                  <View className="gap-3">
+                    {failedDocuments.map((document) => (
+                      <Card key={document.id} className="border-red-200 bg-red-50 shadow-none">
+                        <View className="flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                          <View className="flex-1">
+                            <Text className="text-sm font-semibold text-red-900">{document.filename}</Text>
+                            {document.last_error ? (
+                              <Text className="mt-1 text-sm text-red-700">{document.last_error}</Text>
+                            ) : null}
+                          </View>
+                          <Button
+                            title="Coba lagi"
+                            variant="outline"
+                            onPress={() => void handleRetry(document.id)}
+                            isLoading={isRetryingDocument}
+                            icon={<Ionicons name="refresh-outline" size={18} color={colors.textSecondary} />}
+                          />
+                        </View>
+                      </Card>
+                    ))}
+                  </View>
+                ) : null}
+              </>
+            )}
+          </View>
+        </Card>
 
         {isLoading && !documents ? (
           <Card>
@@ -350,86 +607,6 @@ export default function NewDesignSessionScreen() {
 
         {uploadError ? <AlertBanner variant="error" title="Upload belum berhasil" description={uploadError} /> : null}
         {errorMessage ? <AlertBanner variant="error" title="Belum bisa lanjut" description={errorMessage} /> : null}
-
-        {availableDocuments.length === 0 ? (
-          <Card className="border border-neutral-200 bg-surface">
-            <View className="items-center gap-3 py-6">
-              <Ionicons name="document-text-outline" size={32} color={colors.textSecondary} />
-              <Text className="text-lg font-semibold text-neutral-900">Belum ada materi</Text>
-              <Text className="text-center text-sm text-neutral-500">
-                Unggah minimal satu dokumen untuk memulai penyusunan kurikulum.
-              </Text>
-            </View>
-          </Card>
-        ) : (
-          <View className="gap-4">
-            {availableDocuments.map((document) => {
-              const isSelected = selectedDocIds.includes(document.id);
-              const isReady = document.status === 'ready';
-              const isFailed = document.status === 'failed';
-
-              return (
-                <Card key={document.id} className={isSelected ? 'border-primary bg-primary-50' : ''}>
-                  <View className="gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <View className="flex-1 gap-3">
-                      <View className="flex-row flex-wrap items-center gap-2">
-                        <Text className="text-lg font-semibold text-neutral-900">{document.filename}</Text>
-                        <View className={`rounded-full px-3 py-1 ${statusChipClass(document.status)}`}>
-                          <Text className="text-xs font-semibold">{statusLabel(document.status)}</Text>
-                        </View>
-                      </View>
-                      <Text className="text-sm text-neutral-500">
-                        {(document.doc_type ?? document.file_type).toUpperCase()} • diunggah {new Date(document.created_at).toLocaleString('id-ID')}
-                      </Text>
-                      {document.extracted_company_name ? (
-                        <View className="rounded-2xl border border-neutral-100 bg-neutral-50 p-3">
-                          <Text className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">Deteksi perusahaan</Text>
-                          <Text className="mt-1 text-sm font-semibold text-neutral-900">{document.extracted_company_name}</Text>
-                          {document.extracted_company_summary ? (
-                            <Text className="mt-1 text-sm leading-6 text-neutral-600">{document.extracted_company_summary}</Text>
-                          ) : null}
-                        </View>
-                      ) : null}
-                      {document.last_error ? (
-                        <Text className="text-sm text-red-600">{document.last_error}</Text>
-                      ) : null}
-                    </View>
-
-                    <View className="w-full gap-2 lg:w-[220px]">
-                      <Button
-                        title={isSelected ? 'Batal pilih' : 'Pilih dokumen'}
-                        variant={isSelected ? 'ghost' : 'primary'}
-                        onPress={() => toggleDocument(document.id)}
-                        disabled={!isReady}
-                        icon={
-                          <Ionicons
-                            name={isSelected ? 'checkmark-circle-outline' : 'add-circle-outline'}
-                            size={18}
-                            color={isSelected ? colors.textSecondary : 'white'}
-                          />
-                        }
-                      />
-                      {isFailed ? (
-                        <Button
-                          title="Coba lagi"
-                          variant="outline"
-                          onPress={() => void handleRetry(document.id)}
-                          isLoading={isRetryingDocument}
-                          icon={<Ionicons name="refresh-outline" size={18} color={colors.textSecondary} />}
-                        />
-                      ) : null}
-                      {!isReady && !isFailed ? (
-                        <Text className="text-sm leading-6 text-amber-700">
-                          Dokumen ini masih diproses. Anda bisa meninggalkan halaman dan kembali lagi nanti.
-                        </Text>
-                      ) : null}
-                    </View>
-                  </View>
-                </Card>
-              );
-            })}
-          </View>
-        )}
 
         <View className="flex-row justify-end">
           <Button

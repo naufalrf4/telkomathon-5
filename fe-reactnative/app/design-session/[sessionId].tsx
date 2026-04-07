@@ -29,33 +29,6 @@ const WIZARD_STEPS: Array<{ value: DesignSessionWizardStep; label: string }> = [
 
 const LEVEL_OPTIONS = [1, 2, 3, 4, 5];
 
-function getStepHelper(step: string | undefined): string {
-  switch (step) {
-    case 'uploaded':
-      return 'Dokumen masih menunggu ringkasan. Jalankan analisis awal untuk melanjutkan.';
-    case 'summary_ready':
-      return 'Ringkasan perusahaan dan konteks bisnis sudah terdeteksi. Lengkapi topik dan level kursus sebelum membuat tujuan akhir.';
-    case 'course_context_set':
-      return 'Arah kursus tersimpan. Sekarang sistem bisa membuat beberapa opsi tujuan akhir.';
-    case 'tlo_options_ready':
-      return 'Bandingkan tujuan akhir yang tersedia lalu pilih yang paling tepat.';
-    case 'tlo_selected':
-      return 'Tujuan akhir sudah dipilih. Lanjutkan untuk menurunkan target performa.';
-    case 'performance_options_ready':
-      return 'Pilih target performa yang paling menggambarkan hasil belajar di tempat kerja.';
-    case 'performance_selected':
-      return 'Target performa sudah terkunci. Buat modul belajar pendukung berikutnya.';
-    case 'elo_options_ready':
-      return 'Pilih modul belajar, lalu buat ulang opsi bila kombinasi yang muncul belum pas.';
-    case 'elo_selected':
-      return 'Semua komponen utama sudah siap. Finalkan kurikulum untuk membuka tahap hasil dan personalisasi.';
-    case 'finalized':
-      return 'Kurikulum sudah selesai. Tinjau hasil akhir dan lanjutkan ke personalisasi dari halaman detail.';
-    default:
-      return 'Ikuti wizard secara berurutan sampai kurikulum final siap dipakai.';
-  }
-}
-
 export default function DesignSessionScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
   const router = useRouter();
@@ -260,7 +233,6 @@ export default function DesignSessionScreen() {
         <PageHeader
           eyebrow={`Tahap aktif · ${activeStepLabel}`}
           title={session.course_context?.topic?.trim() || 'Susun kurikulum baru'}
-          description="Wizard ini sekarang mengikuti alur horizontal: ringkasan perusahaan → arah kursus → tujuan akhir → performa → modul belajar → finalisasi. Setiap aksi memberi status yang jelas dan tidak berjalan diam-diam."
           actions={
             <Button
               title="Kembali ke daftar"
@@ -301,12 +273,8 @@ export default function DesignSessionScreen() {
             ) : null}
 
             {showCourseContext ? (
-              <Card title="Tetapkan arah kurikulum" subtitle="Nama perusahaan dan ringkasan bisnis sudah diisi otomatis bila sistem berhasil mendeteksinya.">
+              <Card title="Tetapkan arah kurikulum">
                 <View className="gap-4">
-                  <View className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
-                    <Text className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">Yang perlu Anda lakukan sekarang</Text>
-                    <Text className="mt-2 text-sm leading-6 text-neutral-700">{getStepHelper(activeStep)}</Text>
-                  </View>
                   <TextField
                     label="Topik kursus"
                     required
@@ -342,7 +310,6 @@ export default function DesignSessionScreen() {
                   </View>
                   <TextField
                     label="Kategori kursus"
-                    hint="Opsional"
                     value={courseCategory}
                     onChangeText={(value) => {
                       setCourseContextDirty(true);
@@ -352,7 +319,6 @@ export default function DesignSessionScreen() {
                   />
                   <TextField
                     label="Nama klien atau perusahaan"
-                    hint={session.source_summary?.company_profile_confidence === 'low' ? 'Hasil deteksi ini masih bisa Anda koreksi.' : 'Terisi dari hasil ekstraksi dokumen.'}
                     value={clientCompanyName}
                     onChangeText={(value) => {
                       setCourseContextDirty(true);
@@ -362,7 +328,6 @@ export default function DesignSessionScreen() {
                   />
                   <TextField
                     label="Judul tampilan kursus"
-                    hint="Opsional"
                     value={courseTitle}
                     onChangeText={(value) => {
                       setCourseContextDirty(true);
@@ -372,7 +337,6 @@ export default function DesignSessionScreen() {
                   />
                   <TextField
                     label="Konteks tambahan"
-                    hint="Opsional"
                     value={additionalContext}
                     onChangeText={(value) => {
                       setCourseContextDirty(true);
@@ -383,7 +347,6 @@ export default function DesignSessionScreen() {
                   />
                   <TextField
                     label="Ringkasan perusahaan / kebutuhan bisnis"
-                    hint="Editable — sudah diisi otomatis dari dokumen bila tersedia."
                     value={commercialOverview}
                     onChangeText={(value) => {
                       setCourseContextDirty(true);
@@ -426,16 +389,34 @@ export default function DesignSessionScreen() {
 
             {showGeneratePerformance ? (
               <Card title="Buat target performa" subtitle="Sistem akan menurunkan target performa yang mendukung tujuan akhir yang Anda pilih.">
-                <Button
-                  title="Buat target performa"
-                  onPress={() =>
-                    void runAction(
-                      () => generatePerformanceOptions(),
-                      'Opsi target performa berhasil dibuat.'
-                    )
-                  }
-                  isLoading={isWorking}
-                />
+                <View className="gap-4">
+                  {session.selected_tlo ? (
+                    <View className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
+                      <Text className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">Tujuan akhir terpilih</Text>
+                      <Text className="mt-2 text-sm leading-6 text-neutral-800">{session.selected_tlo.text}</Text>
+                    </View>
+                  ) : null}
+                  <View className="flex-row flex-wrap gap-3">
+                    <Button
+                      title="Coba opsi tujuan akhir lain"
+                      variant="outline"
+                      onPress={() =>
+                        void runAction(() => generateTloOptions(), 'Opsi tujuan akhir baru berhasil dibuat.')
+                      }
+                      isLoading={isWorking}
+                    />
+                    <Button
+                      title="Buat target performa"
+                      onPress={() =>
+                        void runAction(
+                          () => generatePerformanceOptions(),
+                          'Opsi target performa berhasil dibuat.'
+                        )
+                      }
+                      isLoading={isWorking}
+                    />
+                  </View>
+                </View>
               </Card>
             ) : null}
 
@@ -461,11 +442,32 @@ export default function DesignSessionScreen() {
 
             {showGenerateElo ? (
               <Card title="Buat modul belajar" subtitle="Sistem akan membuat beberapa modul belajar dari target performa yang sudah dipilih.">
-                <Button
-                  title="Buat modul belajar"
-                  onPress={() => void runAction(() => generateEloOptions(), 'Opsi modul belajar berhasil dibuat.')}
-                  isLoading={isWorking}
-                />
+                <View className="gap-4">
+                  {session.selected_performance ? (
+                    <View className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
+                      <Text className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">Target performa terpilih</Text>
+                      <Text className="mt-2 text-sm leading-6 text-neutral-800">{session.selected_performance.text}</Text>
+                    </View>
+                  ) : null}
+                  <View className="flex-row flex-wrap gap-3">
+                    <Button
+                      title="Coba opsi performa lain"
+                      variant="outline"
+                      onPress={() =>
+                        void runAction(
+                          () => generatePerformanceOptions(),
+                          'Opsi target performa baru berhasil dibuat.'
+                        )
+                      }
+                      isLoading={isWorking}
+                    />
+                    <Button
+                      title="Buat modul belajar"
+                      onPress={() => void runAction(() => generateEloOptions(), 'Opsi modul belajar berhasil dibuat.')}
+                      isLoading={isWorking}
+                    />
+                  </View>
+                </View>
               </Card>
             ) : null}
 
@@ -524,15 +526,29 @@ export default function DesignSessionScreen() {
             {showFinalize ? (
               <Card title="Finalkan kurikulum" subtitle="Semua komponen utama sudah siap untuk disusun menjadi hasil akhir.">
                 <View className="gap-4">
+                  <View className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
+                    <Text className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">Modul belajar terpilih</Text>
+                    <Text className="mt-2 text-sm leading-6 text-neutral-800">{session.selected_elos.length} modul siap difinalkan.</Text>
+                  </View>
                   <Text className="text-neutral-600">
                     Sistem akan menyusun kurikulum final dari tujuan, target performa, dan modul belajar yang sudah Anda tetapkan.
                   </Text>
-                  <Button
-                    title="Finalkan kurikulum"
-                    onPress={handleFinalize}
-                    isLoading={isWorking}
-                    icon={<Ionicons name="checkmark-circle-outline" size={18} color="white" />}
-                  />
+                  <View className="flex-row flex-wrap gap-3">
+                    <Button
+                      title="Buat ulang opsi modul"
+                      variant="outline"
+                      onPress={() =>
+                        void runAction(() => generateEloOptions(), 'Opsi modul belajar berhasil diperbarui.')
+                      }
+                      isLoading={isWorking}
+                    />
+                    <Button
+                      title="Finalkan kurikulum"
+                      onPress={handleFinalize}
+                      isLoading={isWorking}
+                      icon={<Ionicons name="checkmark-circle-outline" size={18} color="white" />}
+                    />
+                  </View>
                 </View>
               </Card>
             ) : null}
@@ -569,10 +585,6 @@ export default function DesignSessionScreen() {
                   </Text>
                 ) : null}
               </View>
-            </Card>
-
-            <Card title="Panduan tahap aktif" subtitle={activeStepLabel}>
-              <Text className="text-sm leading-6 text-neutral-700">{getStepHelper(activeStep)}</Text>
             </Card>
 
             {showPerformancePreview ? (

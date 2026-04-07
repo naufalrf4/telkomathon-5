@@ -40,6 +40,7 @@ export function useDocuments() {
     retryDocumentAsync: retryMutation.mutateAsync,
     isRetryingDocument: retryMutation.isPending,
     deleteDocument: deleteMutation.mutate,
+    deleteDocumentAsync: deleteMutation.mutateAsync,
     isDeleting: deleteMutation.isPending,
   };
 }
