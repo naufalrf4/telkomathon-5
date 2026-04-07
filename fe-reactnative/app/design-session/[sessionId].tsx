@@ -588,11 +588,11 @@ export default function DesignSessionScreen() {
             </Card>
 
             {showPerformancePreview ? (
-              <Card title="Pratinjau target hasil" subtitle="Pastikan performa, kondisi, dan standar sudah sejalan sebelum finalisasi.">
+              <Card title="Pratinjau PCS" subtitle="Pastikan Performance, Condition, dan Standard (PCS) sudah sejalan sebelum finalisasi.">
                 <View className="gap-3">
-                  <PreviewField label="Performance" value={session.selected_performance?.text ?? 'Belum dipilih'} />
-                  <PreviewField label="Condition" value={session.preview_condition_result ?? 'Akan muncul setelah performa dipilih.'} />
-                  <PreviewField label="Standard" value={session.preview_standard_result ?? 'Akan disesuaikan setelah ELO dipilih.'} />
+                  <PreviewField label="Performance (PCS)" value={session.selected_performance?.text ?? 'Belum dipilih'} />
+                  <PreviewField label="Condition (PCS)" value={session.preview_condition_result ?? 'Akan muncul setelah Performance (PCS) dipilih.'} />
+                  <PreviewField label="Standard (PCS)" value={session.preview_standard_result ?? 'Akan disesuaikan setelah ELO dipilih.'} />
                 </View>
               </Card>
             ) : null}
