@@ -343,6 +343,8 @@ def _extract_focus_points(content_text: str) -> list[str]:
         cleaned = " ".join(sentence.replace("\r", " ").split()).strip(" -•*")
         if len(cleaned) < 40:
             continue
+        if _looks_like_low_quality_focus_point(cleaned):
+            continue
         lowered = cleaned.lower()
         score = sum(
             1
@@ -402,11 +404,21 @@ def _detect_sector_phrase(focus_points: list[str]) -> str:
 
 
 def _build_focus_phrase(focus_points: list[str]) -> str:
-    if not focus_points:
-        return "penguatan kapabilitas talenta, akselerasi inovasi, dan pengambilan keputusan berbasis data"
-    clauses = [_trim_focus_clause(point) for point in focus_points if _trim_focus_clause(point)]
+    theme_phrases = _derive_focus_theme_phrases(focus_points)
+    if theme_phrases:
+        if len(theme_phrases) == 1:
+            return theme_phrases[0]
+        if len(theme_phrases) == 2:
+            return f"{theme_phrases[0]} dan {theme_phrases[1]}"
+        return f"{theme_phrases[0]}, {theme_phrases[1]}, dan {theme_phrases[2]}"
+
+    clauses = [
+        clause
+        for clause in (_trim_focus_clause(point) for point in focus_points)
+        if clause and not _looks_like_low_quality_focus_clause(clause)
+    ]
     if not clauses:
-        return "penguatan kapabilitas talenta, akselerasi inovasi, dan pengambilan keputusan berbasis data"
+        return _default_focus_phrase()
     if len(clauses) == 1:
         return clauses[0]
     if len(clauses) == 2:
@@ -424,3 +436,75 @@ def _trim_focus_clause(value: str) -> str:
         flags=re.IGNORECASE,
     )
     return cleaned[:160].strip(" ,")
+
+
+def _default_focus_phrase() -> str:
+    return (
+        "penguatan kapabilitas talenta, akselerasi inovasi, dan pengambilan keputusan berbasis data"
+    )
+
+
+def _derive_focus_theme_phrases(focus_points: list[str]) -> list[str]:
+    lowered = " ".join(point.lower() for point in focus_points)
+    theme_phrases: list[str] = []
+    theme_rules = (
+        (
+            ("talenta", "kompetensi", "kapabilitas", "leadership", "kepemimpinan"),
+            "penguatan kapabilitas talenta dan kepemimpinan",
+        ),
+        (
+            ("data", "informasi", "akses informasi", "insight", "analitik"),
+            "penguatan pengambilan keputusan berbasis data",
+        ),
+        (
+            ("inovasi", "transformasi", "digital", "teknologi"),
+            "akselerasi inovasi dan transformasi kerja",
+        ),
+        (
+            ("konektivitas", "pelanggan", "layanan", "operasional"),
+            "peningkatan kualitas layanan dan efektivitas operasional",
+        ),
+        (
+            ("nominasi", "remunerasi", "governance", "tata kelola", "komite"),
+            "penguatan tata kelola organisasi dan manajemen talenta",
+        ),
+    )
+
+    for markers, phrase in theme_rules:
+        if any(marker in lowered for marker in markers) and phrase not in theme_phrases:
+            theme_phrases.append(phrase)
+        if len(theme_phrases) >= 3:
+            break
+
+    return theme_phrases
+
+
+def _looks_like_low_quality_focus_point(value: str) -> bool:
+    lowered = value.lower()
+    if len(re.findall(r"\d", value)) >= 2:
+        return True
+    if value.count(",") >= 2:
+        return True
+    low_quality_markers = (
+        "anak perusahaan",
+        "komite nominasi",
+        "remunerasi",
+        "akses informasi",
+        "data perusahaan",
+        "required positions",
+        "company talent",
+        ", high",
+        "terbatasnya talenta internal",
+    )
+    return any(marker in lowered for marker in low_quality_markers)
+
+
+def _looks_like_low_quality_focus_clause(value: str) -> bool:
+    lowered = value.lower()
+    if len(re.findall(r"\d", value)) >= 2:
+        return True
+    if value.count(",") >= 2:
+        return True
+    if any(token in lowered for token in ("required positions", "company talent", ", high")):
+        return True
+    return False

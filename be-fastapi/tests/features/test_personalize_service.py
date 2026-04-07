@@ -228,3 +228,60 @@ async def test_personalize_normalizes_numeric_fields(
 
     assert result.recommendations[0].estimated_duration_minutes == 30
     assert result.recommendations[0].priority == 3
+
+
+@pytest.mark.asyncio
+async def test_personalize_passes_grounding_content_to_prompt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    syllabus = build_syllabus()
+    db = FakePersonalizeSession(syllabus)
+    captured_available_content: dict[str, str] = {"value": ""}
+
+    def fake_build_personalize_prompt(
+        syllabus_context: dict[str, object],
+        competency_gaps: list[dict[str, object]],
+        available_content: str,
+        participant_name: str,
+    ) -> list[dict[str, str]]:
+        _ = syllabus_context, competency_gaps, participant_name
+        captured_available_content["value"] = available_content
+        return [{"role": "user", "content": "prompt"}]
+
+    async def fake_chat_complete(messages: object) -> str:
+        _ = messages
+        return (
+            '{"recommendations": ['
+            '{"title": "Latihan Python", "description": "Perkuat notebook dasar.", "estimated_duration_minutes": 45, "priority": 2, "type": "practice"}'
+            "]}"
+        )
+
+    monkeypatch.setattr(
+        "app.features.personalize.service.build_personalize_prompt",
+        fake_build_personalize_prompt,
+    )
+    monkeypatch.setattr("app.features.personalize.service.chat_complete", fake_chat_complete)
+
+    service = PersonalizeService(cast(AsyncSession, cast(object, db)))
+    await service.analyze_and_recommend(
+        syllabus.id,
+        PersonalizeRequest(
+            participant_name="Aulia Rahman",
+            competency_gaps=[
+                CompetencyGap(
+                    skill="Python for ML",
+                    current_level=1,
+                    required_level=3,
+                    gap_description="Belum konsisten membaca dataset dan menyiapkan notebook ML.",
+                )
+            ],
+        ),
+        owner_id=syllabus.owner_id,
+    )
+
+    grounded_content = captured_available_content["value"]
+    assert grounded_content
+    assert (syllabus.company_profile_summary or "") in grounded_content
+    assert (syllabus.commercial_overview or "") in grounded_content
+    assert (syllabus.performance_result or "") in grounded_content
+    assert str(syllabus.elos[0]["elo"]) in grounded_content

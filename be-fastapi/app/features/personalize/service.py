@@ -168,10 +168,11 @@ class PersonalizeService:
             "elos": syllabus.elos,
             "journey": syllabus.journey,
         }
+        available_content = self._build_available_content(syllabus)
         messages = build_personalize_prompt(
             syllabus_dict,
             competency_gaps,
-            "",
+            available_content,
             participant_name,
         )
         recommendations = await self._generate_recommendations(
@@ -192,6 +193,57 @@ class PersonalizeService:
         await self.db.flush()
         await self.db.refresh(record)
         return record
+
+    def _build_available_content(self, syllabus: GeneratedSyllabus) -> str:
+        sections: list[str] = []
+
+        if syllabus.company_profile_summary:
+            sections.append(f"Company Profile Summary: {syllabus.company_profile_summary}")
+        if syllabus.commercial_overview:
+            sections.append(f"Business Context: {syllabus.commercial_overview}")
+        if syllabus.performance_result:
+            sections.append(f"Performance Result: {syllabus.performance_result}")
+        if syllabus.condition_result:
+            sections.append(f"Condition Result: {syllabus.condition_result}")
+        if syllabus.standard_result:
+            sections.append(f"Standard Result: {syllabus.standard_result}")
+
+        elo_lines = [
+            str(item.get("elo", "")).strip()
+            for item in syllabus.elos
+            if isinstance(item, dict) and str(item.get("elo", "")).strip()
+        ]
+        if elo_lines:
+            sections.append("ELOs:\n- " + "\n- ".join(elo_lines))
+
+        journey = syllabus.journey if isinstance(syllabus.journey, dict) else {}
+        journey_sections: list[str] = []
+        for label, key in (
+            ("Pre-learning", "pre_learning"),
+            ("Classroom", "classroom"),
+            ("After-learning", "after_learning"),
+        ):
+            stage = journey.get(key)
+            if not isinstance(stage, dict):
+                continue
+            description = str(stage.get("description", "")).strip()
+            content = stage.get("content")
+            content_lines = (
+                [
+                    str(item).strip()
+                    for item in content
+                    if isinstance(item, str) and str(item).strip()
+                ]
+                if isinstance(content, list)
+                else []
+            )
+            parts = [part for part in [description, "; ".join(content_lines)] if part]
+            if parts:
+                journey_sections.append(f"{label}: {' | '.join(parts)}")
+        if journey_sections:
+            sections.append("Learning Journey:\n" + "\n".join(journey_sections))
+
+        return "\n\n".join(sections)
 
 
 def _normalize_recommendations(raw: list[object]) -> list[LearningRecommendation]:

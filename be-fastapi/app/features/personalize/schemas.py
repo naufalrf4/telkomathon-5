@@ -9,15 +9,20 @@ class CompetencyGap(BaseModel):
     skill: str
     current_level: int
     required_level: int
-    gap_description: str
+    gap_description: str = ""
 
-    @field_validator("skill", "gap_description")
+    @field_validator("skill")
     @classmethod
     def validate_text(cls, value: str) -> str:
         normalized = value.strip()
         if not normalized:
             raise ValueError("Field must not be empty")
         return normalized
+
+    @field_validator("gap_description")
+    @classmethod
+    def normalize_gap_description(cls, value: str) -> str:
+        return value.strip()
 
     @field_validator("current_level", "required_level")
     @classmethod
